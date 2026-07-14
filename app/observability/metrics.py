@@ -9,18 +9,38 @@ cho moi request cung la mot tin hieu van hanh quan trong khong kem thoi gian xu 
 """
 
 import threading
+from collections import deque
 
 import numpy as np
 
-# Latency buckets in milliseconds, chosen around what an LLM call actually costs in time.
-# Cac moc do tre (mili giay), chon quanh khoang thoi gian mot lan goi LLM thuc te ton.
-LATENCY_BUCKETS_MS = (250, 500, 1000, 2000, 4000, 8000, 16000)
+# How many recent latencies are kept in order to compute percentiles.
+#
+# This used to be an unbounded list, which is a slow way to run out of memory: one float was
+# appended per request and none was ever removed, so a service that stayed up long enough would
+# eventually be storing millions of them, and np.percentile would get slower over every one.
+#
+# A bounded window is also the more honest measurement. A percentile over every request since the
+# process started answers "how has this service ever behaved", which nobody is asking. A
+# percentile over the last few thousand answers "how is it behaving now", which is the question a
+# latency graph exists for, and it is the one that moves when something breaks.
+#
+# So bao nhieu do tre gan nhat duoc giu lai de tinh phan vi.
+#
+# Truoc day day la mot list khong gioi han, va do la mot cach cham rai de het bo nho: moi request
+# them mot so thuc va khong bao gio bot di, nen mot dich vu chay du lau se giu hang trieu so, con
+# np.percentile thi cham dan theo tung so mot.
+#
+# Mot cua so co gioi han cung la phep do trung thuc hon. Phan vi tinh tren moi request tu luc tien
+# trinh khoi dong tra loi cau "dich vu nay tu truoc toi nay chay ra sao", von khong ai hoi. Phan vi
+# tinh tren vai nghin request gan nhat tra loi cau "no dang chay ra sao", dung cau ma mot bieu do
+# do tre sinh ra de tra loi, va la cau se doi ngay khi co su co.
+LATENCY_WINDOW = 10_000
 
 
 class Metrics:
-    def __init__(self) -> None:
+    def __init__(self, *, latency_window: int = LATENCY_WINDOW) -> None:
         self._lock = threading.Lock()
-        self._latencies_ms: list[float] = []
+        self._latencies_ms: deque[float] = deque(maxlen=latency_window)
         self._requests = 0
         self._errors = 0
         self._tool_calls: dict[str, int] = {}
