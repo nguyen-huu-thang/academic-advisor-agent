@@ -20,6 +20,10 @@ Trang này gom lại các đánh đổi đã chọn, lý do chọn, và điều 
 | scrypt cho mật khẩu | SHA-256, hay bcrypt | Hàm băm nhanh là điểm yếu, không phải ưu điểm, khi bảng bị đánh cắp. scrypt cứng cả CPU lẫn bộ nhớ và có sẵn trong thư viện chuẩn | Nếu cần chuẩn hóa theo Argon2id |
 | Ghim thuật toán JWT là HS256 | Đọc thuật toán từ header của token | Token không được quyền quyết định nó sẽ bị kiểm tra ra sao. Đó là toàn bộ nội dung của hai lỗ hổng `alg: none` và alg-confusion | Không bao giờ |
 | Khóa dòng lớp | Khóa cả bảng | Hai người đăng ký hai lớp khác nhau không có lý do gì phải chờ nhau | Không bao giờ |
+| Khóa thêm dòng sinh viên | Chỉ khóa dòng lớp | Trần tín chỉ và trùng lịch là thuộc tính của một sinh viên, không phải của một lớp. Khóa lớp không nhìn thấy được va chạm đó | Không bao giờ |
+| Chạy lại cả sáu luật trong transaction | Chỉ đếm lại sĩ số | Một ràng buộc database chỉ bảo vệ được thứ nó diễn tả được, mà không có ràng buộc nào diễn tả được trùng lịch | Không bao giờ |
+| Độ trễ giữ 10.000 mẫu gần nhất | List không giới hạn | List không giới hạn là một cách chậm rãi để hết bộ nhớ. Cửa sổ trượt còn trả lời đúng câu hỏi hơn: "nó đang chạy ra sao" | Không bao giờ |
+| Token riêng cho /metrics và /stats | Dùng token sinh viên, hoặc để mở | Sinh viên đăng nhập được thì không vì thế mà được đọc hóa đơn và biết khi nào guardrail ra tay | Không bao giờ |
 | Chặn thời gian chờ ở 8 giây | Chờ trọn 51 giây theo Gemini | Sinh viên không đợi 51 giây, họ sẽ F5 và tạo thêm tải | Nếu chuyển sang xử lý bất đồng bộ |
 | Trả 429 khi hết quota | Trả 500 | Bị nhà cung cấp chặn không phải lỗi nội bộ | Không bao giờ |
 

@@ -114,15 +114,23 @@ Khóa theo từng mã sinh viên chứ không khóa theo IP, và điều đó **
 
 Bộ đếm nằm trong bộ nhớ của tiến trình. Nói thẳng ra: chạy hai bản sao sau load balancer thì có hai bộ đếm riêng, và kẻ tấn công rải đều các lần đoán qua cả hai sẽ được gấp đôi số lượt. Ở quy mô này thì đó là đánh đổi đúng so với việc kéo thêm Redis vào; nhưng nếu dịch vụ chạy nhiều hơn một instance, đây là thứ đầu tiên phải đưa ra ngoài.
 
+## Endpoint vận hành dùng một khóa khác
+
+`/metrics` và `/stats` nằm sau `METRICS_TOKEN`, và **token của sinh viên không mở được chúng**. Có test riêng khẳng định đúng điều đó, vì "nằm sau một lớp xác thực nào đó" và "nằm sau đúng lớp xác thực cần thiết" là hai chuyện khác nhau.
+
+Lý do: hai endpoint này báo cáo số token đã tiêu, số tiền USD, và `agent_tool_denied_total` - số lần guardrail phải ra tay. Con số cuối cùng nói cho người ngoài biết chính xác khi nào đòn tấn công của họ chạm tới guardrail, vốn là thứ cuối cùng nên đưa cho họ.
+
+`/health` thì vẫn công khai, vì load balancer phải gọi được nó mà không cầm theo bí mật nào.
+
 ## Không có giá trị mặc định nào là an toàn
 
-`JWT_SECRET` là bắt buộc, tối thiểu 32 ký tự, và **service từ chối khởi động** nếu thiếu hoặc quá ngắn.
+`JWT_SECRET` và `METRICS_TOKEN` đều là bắt buộc, tối thiểu 32 ký tự, và **service từ chối khởi động** nếu thiếu hoặc quá ngắn.
 
 Một khóa ký ngắn đến mức dò vét cạn ngoại tuyến được thì cũng như không có khóa ký: ai lấy lại được nó là cấp được token cho bất kỳ sinh viên nào. Ở đây không có giá trị mặc định nào là an toàn, nên dịch vụ không lấy đại một giá trị - nó chết ngay lúc khởi động, ở nơi lập trình viên nhìn thấy, thay vì chạy tiếp và mở cửa cho tất cả mọi người.
 
 ## Kiểm thử
 
-22 test, không đụng tới database và không đụng tới mạng. Mật khẩu, token và bộ đếm khóa đều là hàm thuần của đầu vào, còn đồng hồ thì được truyền vào chứ không đọc tại chỗ - chính vì vậy mà kiểm tra được một token hết hạn mà không phải ngồi đợi một tiếng đồng hồ.
+28 test, không đụng tới database và không đụng tới mạng. Mật khẩu, token và bộ đếm khóa đều là hàm thuần của đầu vào, còn đồng hồ thì được truyền vào chứ không đọc tại chỗ - chính vì vậy mà kiểm tra được một token hết hạn mà không phải ngồi đợi một tiếng đồng hồ.
 
 Những test đáng nói:
 

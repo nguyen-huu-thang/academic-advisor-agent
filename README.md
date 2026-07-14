@@ -174,10 +174,10 @@ copy .env.example .env          # rồi điền GEMINI_API_KEY, DATABASE_URL và
 
 Lấy API key miễn phí tại https://aistudio.google.com/apikey
 
-Sinh khóa ký JWT (bắt buộc, tối thiểu 32 ký tự - service từ chối khởi động nếu thiếu hoặc quá ngắn, vì một khóa ký đoán được thì cũng như không có khóa ký):
+Sinh hai khóa bí mật: `JWT_SECRET` để ký access token của sinh viên, và `METRICS_TOKEN` để mở hai endpoint vận hành. Cả hai bắt buộc, tối thiểu 32 ký tự - service **từ chối khởi động** nếu thiếu hoặc quá ngắn, vì một khóa đoán được thì cũng như không có khóa.
 
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # chạy hai lần
 ```
 
 Khởi tạo dữ liệu:
@@ -237,10 +237,12 @@ Phản hồi trả về câu trả lời kèm danh sách tool đã gọi, số v
 | Endpoint | Mô tả |
 |---|---|
 | `POST /auth/login` | Đổi mã sinh viên và mật khẩu lấy access token |
-| `POST /chat` | Hỏi trợ lý. **Cần `Authorization: Bearer <token>`** |
-| `GET /health` | Kiểm tra service và số đoạn tài liệu đã nạp |
-| `GET /metrics` | Chỉ số theo định dạng Prometheus |
-| `GET /stats` | Chỉ số dạng JSON, dễ đọc khi phát triển |
+| `POST /chat` | Hỏi trợ lý. Cần `Authorization: Bearer <access_token>` |
+| `GET /health` | Kiểm tra service và số đoạn tài liệu đã nạp. Công khai, vì load balancer cần gọi được |
+| `GET /metrics` | Chỉ số theo định dạng Prometheus. Cần `Authorization: Bearer <METRICS_TOKEN>` |
+| `GET /stats` | Chỉ số dạng JSON, dễ đọc khi phát triển. Cần `METRICS_TOKEN` |
+
+Hai endpoint cuối dùng một khóa **khác** với token của sinh viên, và token của sinh viên **không mở được chúng**. Chúng báo cáo số token đã tiêu, số tiền USD, và số lần guardrail chặn - đó là việc của người vận hành, không phải của sinh viên. Một người đăng nhập được thì không vì thế mà đọc được hóa đơn.
 
 ---
 
@@ -292,9 +294,11 @@ pytest tests -q -m "not integration"     # chỉ unit test, không cần databas
 Tập trung vào phần không được phép sai:
 
 - **26 test cho guardrail**: sáu luật đăng ký, hai bước xác nhận, chặn tool lạ, và các trường hợp biên (chạm đúng trần tín chỉ thì được phép; chồng đúng một tiết thì đã là trùng lịch).
-- **25 test cho tầng xác thực**: đổi `sub` sang mã người khác thì chữ ký vỡ; `alg: none` bị từ chối; token thiếu `exp` bị từ chối vì token không hạn thì sống vĩnh viễn; bản băm rỗng của một lần đổi lược đồ dở dang không bao giờ đăng nhập được; khóa một sinh viên không được khóa lây người khác; và `student_id` không còn là một trường của `ChatRequest`.
-- **3 test tranh chấp đồng thời** (cần PostgreSQL): 20 luồng cùng giành chỗ cuối của một lớp thì đúng một luồng thắng và 19 luồng còn lại phải bị từ chối **đúng theo đường đã thiết kế**, không phải chết vì lỗi database thô. Cộng thêm test xác nhận hai lần chỉ ghi danh một lần, và test chứng minh `CHECK` constraint chặn được cả khi code sai.
+- **28 test cho tầng xác thực**: đổi `sub` sang mã người khác thì chữ ký vỡ; `alg: none` bị từ chối; token thiếu `exp` bị từ chối vì token không hạn thì sống vĩnh viễn; bản băm rỗng của một lần đổi lược đồ dở dang không bao giờ đăng nhập được; khóa một sinh viên không được khóa lây người khác; token của sinh viên **không** mở được `/metrics`; và `student_id` không còn là một trường của `ChatRequest`.
+- **4 test tranh chấp đồng thời** (cần PostgreSQL): 20 luồng cùng giành chỗ cuối của một lớp thì đúng một luồng thắng và 19 luồng còn lại phải bị từ chối **đúng theo đường đã thiết kế**, không phải chết vì lỗi database thô. Một sinh viên xác nhận hai lớp **trùng lịch** cùng lúc thì đúng một lớp lọt. Cộng thêm test xác nhận hai lần chỉ ghi danh một lần, và test chứng minh `CHECK` constraint chặn được cả khi code sai.
 - Cắt tài liệu, tính chi phí, và xử lý rate limit.
+
+Hai test đồng thời trên đều được kiểm chứng bằng cách **bỏ khóa đi và xem chúng có đỏ không**. Một bài test đồng thời không đỏ khi bỏ khóa thì không chứng minh được gì cả, nó chỉ đang chạy tuần tự.
 
 ---
 

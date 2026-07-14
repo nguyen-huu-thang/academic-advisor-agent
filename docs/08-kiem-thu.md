@@ -13,19 +13,19 @@ Câu trả lời của model diễn đạt hơi khác đi thì không sao. Một
 Nên nỗ lực kiểm thử dồn vào đúng những chỗ đó.
 
 ```
-69 test, chạy trong khoảng 3 giây
+74 test, chạy trong khoảng 4 giây
 ```
 
 | Nhóm | Số test | Cần database? |
 |---|---|---|
 | Guardrail | 26 | Không |
-| Xác thực (mật khẩu, JWT, khóa đăng nhập) | 25 | Không |
+| Xác thực (mật khẩu, JWT, khóa đăng nhập, token vận hành) | 28 | Không |
 | Retry và rate limit | 6 | Không |
-| Đo chi phí và metrics | 5 | Không |
+| Đo chi phí và metrics | 6 | Không |
+| Tranh chấp đồng thời | 4 | **Có** |
 | Cắt tài liệu | 4 | Không |
-| Tranh chấp đồng thời | 3 | **Có** |
 
-Chỉ 3 trên 69 test cần tới database. Đó không phải may mắn: cả guardrail lẫn tầng xác thực đều là hàm thuần, và đồng hồ được truyền vào chứ không đọc tại chỗ.
+Chỉ 4 trên 74 test cần tới database. Đó không phải may mắn: cả guardrail lẫn tầng xác thực đều là hàm thuần, và đồng hồ được truyền vào chứ không đọc tại chỗ.
 
 ```bash
 pytest tests -q                          # toàn bộ

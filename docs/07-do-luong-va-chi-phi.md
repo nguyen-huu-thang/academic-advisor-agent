@@ -26,6 +26,24 @@ agent_tool_calls_total{tool}  So lan tung tool duoc goi
 
 `agent_tool_denied_total` đáng chú ý: nó là chỉ số về **an toàn**, không phải về hiệu năng. Nếu con số này đột nhiên tăng vọt, hoặc là dữ liệu đang sai, hoặc là có ai đó đang thử tấn công hệ thống. Cả hai đều đáng biết.
 
+## Hai endpoint này không dành cho sinh viên
+
+`/metrics` và `/stats` nằm sau `METRICS_TOKEN`, một khóa **khác** với token đăng nhập của sinh viên, và token của sinh viên không mở được chúng.
+
+Lý do đơn giản: chúng báo cáo số tiền dịch vụ tiêu, số token đã dùng, và số lần guardrail phải ra tay. Đó là việc của người vận hành. Một sinh viên đăng nhập được thì không vì thế mà được đọc hóa đơn, và `agent_tool_denied_total` còn nói cho người ngoài biết chính xác khi nào các đòn tấn công của họ chạm tới guardrail - vốn là thứ cuối cùng nên đưa cho họ.
+
+`/health` thì vẫn công khai, vì load balancer phải gọi được nó mà không cầm theo bí mật nào.
+
+## Bộ đếm thì tích lũy, độ trễ thì trượt
+
+`agent_requests_total`, `agent_cost_usd_total` và các counter khác đếm tích lũy từ lúc tiến trình khởi động, đúng như một counter Prometheus phải thế.
+
+Nhưng **độ trễ chỉ giữ 10.000 mẫu gần nhất**, trong một `deque` có giới hạn.
+
+Trước đây nó là một list không giới hạn, và đó là một cách chậm rãi để hết bộ nhớ: mỗi request thêm một số thực và không bao giờ bớt đi, nên một dịch vụ chạy đủ lâu sẽ giữ hàng triệu số, còn `np.percentile` thì chậm dần theo từng số một.
+
+Cửa sổ có giới hạn cũng là phép đo **trung thực hơn**. Phân vi tính trên mọi request từ lúc tiến trình khởi động trả lời câu "dịch vụ này từ trước tới nay chạy ra sao", vốn không ai hỏi. Phân vị tính trên vài nghìn request gần nhất trả lời câu "nó **đang** chạy ra sao" - đúng câu mà một biểu đồ độ trễ sinh ra để trả lời, và là câu sẽ đổi ngay khi có sự cố.
+
 ## Số liệu đo được
 
 Đo trên 10 request của `scripts/demo.py`, model `gemini-3.1-flash-lite`, PostgreSQL 18 chạy cục bộ, **service vừa khởi động lại để bộ đếm bắt đầu từ 0**:
