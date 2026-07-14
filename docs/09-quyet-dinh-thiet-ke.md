@@ -16,6 +16,9 @@ Trang này gom lại các đánh đổi đã chọn, lý do chọn, và điều 
 | Tách đăng ký làm 2 tool | Một tool với cờ `da_xac_nhan` | Cờ boolean chỉ là model tự khen mình. Cần bằng chứng, không cần lời khai | Không bao giờ |
 | Quét vector toàn bộ bằng numpy | pgvector, Milvus | 25 đoạn quét mất dưới 1 ms, trong khi Gemini mất 2000 ms | Vượt khoảng 100 nghìn đoạn |
 | Bỏ tham số mã sinh viên khỏi tool | Cho model điền rồi kiểm tra quyền | Ô trống không tồn tại thì không lạm dụng được | Khi cần phục vụ cố vấn học tập tra nhiều sinh viên |
+| Bỏ luôn mã sinh viên khỏi body HTTP | Nhận trong body rồi đối chiếu với token | Cùng một lý do, áp ra một lớp nữa. Một trường không tồn tại thì không thể quên kiểm tra nó | Không bao giờ |
+| scrypt cho mật khẩu | SHA-256, hay bcrypt | Hàm băm nhanh là điểm yếu, không phải ưu điểm, khi bảng bị đánh cắp. scrypt cứng cả CPU lẫn bộ nhớ và có sẵn trong thư viện chuẩn | Nếu cần chuẩn hóa theo Argon2id |
+| Ghim thuật toán JWT là HS256 | Đọc thuật toán từ header của token | Token không được quyền quyết định nó sẽ bị kiểm tra ra sao. Đó là toàn bộ nội dung của hai lỗ hổng `alg: none` và alg-confusion | Không bao giờ |
 | Khóa dòng lớp | Khóa cả bảng | Hai người đăng ký hai lớp khác nhau không có lý do gì phải chờ nhau | Không bao giờ |
 | Chặn thời gian chờ ở 8 giây | Chờ trọn 51 giây theo Gemini | Sinh viên không đợi 51 giây, họ sẽ F5 và tạo thêm tải | Nếu chuyển sang xử lý bất đồng bộ |
 | Trả 429 khi hết quota | Trả 500 | Bị nhà cung cấp chặn không phải lỗi nội bộ | Không bao giờ |
@@ -52,7 +55,9 @@ Nói thẳng, không giấu.
 
 **Dữ liệu là mô phỏng.** Không kết nối hệ thống quản lý đào tạo thật, vì không có quyền truy cập. Nhưng phần khó của bài toán (quyết định model có được ghi hay không, xử lý đúng khi nhiều người cùng ghi, chứng minh được agent đã làm gì) không dễ đi chút nào khi dữ liệu là mô phỏng.
 
-**Chưa có xác thực.** Dịch vụ giả định `student_id` đến từ một tầng đã xác thực sẵn, và không coi nó là dữ liệu người dùng nhập vào. Trong hệ thống thật, giá trị này phải đọc từ phiên đã xác thực chứ không phải từ body của request.
+**Bộ đếm khóa đăng nhập nằm trong tiến trình.** Sai mật khẩu quá 5 lần thì tài khoản bị khóa 15 phút, nhưng bộ đếm đó nằm trong bộ nhớ của một tiến trình. Chạy hai bản sao sau load balancer thì có hai bộ đếm riêng, và kẻ tấn công rải đều các lần đoán qua cả hai sẽ được gấp đôi số lượt. Ở quy mô này, đó là đánh đổi đúng so với việc kéo thêm Redis vào; nhưng nếu dịch vụ chạy nhiều hơn một instance thì đây là thứ đầu tiên phải đưa ra ngoài. Xem [trang 10](10-xac-thuc.md).
+
+**Chưa có refresh token, chưa có thu hồi token.** Access token sống 60 phút, và trong 60 phút đó không có cách nào rút nó lại trước hạn. Claim `jti` đã được ghi sẵn trong mỗi token để một danh sách thu hồi sau này có thể lấy làm khóa, nhưng danh sách đó chưa tồn tại.
 
 **Chưa có tool hủy đăng ký.** Sinh viên bị vượt trần tín chỉ hiện phải liên hệ phòng đào tạo. Đây là tool tiếp theo đáng làm, và nó cũng cần transaction (trả chỗ về cho lớp, giảm `enrolled`).
 

@@ -21,6 +21,7 @@ README này là bản tóm tắt. Phần giải thích đầy đủ, kèm lý do
 | [7. Đo lường và chi phí](docs/07-do-luong-va-chi-phi.md) | Vì sao đo tiền song song với độ trễ, chi phí thực sự nằm ở đâu |
 | [8. Kiểm thử](docs/08-kiem-thu.md) | Test cái không được phép sai, và cái cố tình không test |
 | [9. Quyết định thiết kế](docs/09-quyet-dinh-thiet-ke.md) | Bảng đánh đổi, giới hạn đã biết, hướng phát triển |
+| [10. Xác thực](docs/10-xac-thuc.md) | Một lỗ hổng có thật và cách vá: mã sinh viên từ token đã ký, không từ body |
 
 ---
 
@@ -98,6 +99,16 @@ Guardrail là một hàm thuần: không chạm database, không chạm đồng 
 
 **Tham số không tồn tại thì không lạm dụng được.** Các tool đọc hồ sơ sinh viên không nhận tham số mã sinh viên. Trợ lý chỉ phục vụ đúng một sinh viên đã xác thực, nên mã sinh viên lấy từ `TurnContext`. Cách chắc chắn nhất để model không thể đọc bảng điểm của người khác là không cho nó một ô trống nào để điền mã người khác vào.
 
+**Và nguyên tắc đó phải áp dụng cho cả tầng HTTP, không chỉ tầng tool.** Đây là lỗ hổng thật đã có trong dự án và đã được vá. Mã sinh viên từng nằm trong body của `POST /chat`, nghĩa là toàn bộ lập luận ở trên bị vô hiệu ngay tại cửa: bịt ô trống ở schema của tool nhưng lại mở toang một ô trống y hệt ở tầng ngoài. Bất kỳ ai cũng chỉ cần gõ mã của người khác vào là đọc được bảng điểm và GPA của họ.
+
+Bây giờ mã sinh viên đến từ **claim `sub` của một JWT đã ký**, và không đến từ đâu khác. Trường `student_id` bị **xóa hẳn** khỏi `ChatRequest`, đúng nước đi đã dùng cho schema của tool: một `student_id` gửi kèm trong body hôm nay không bị từ chối, nó đơn giản là không được đọc. Chi tiết ở [docs/10](docs/10-xac-thuc.md).
+
+```text
+Token của An + "student_id": "22021003" (Cường) trong body
+  -> Trợ lý trả lời: "Họ và tên: Nguyễn Văn An, GPA: 2.84"     (Cường có GPA 3.73)
+  -> tool_audit_log ghi: student_id = 22021001                  (không phải 22021003)
+```
+
 **Tranh chấp chỗ cuối cùng.** Guardrail đọc sĩ số ở ngoài mọi transaction, từ trước khi model được hỏi phải làm gì. Đến lúc một lệnh xác nhận thực sự chạy, con số đó có thể đã cũ. Vì vậy `xac_nhan_dang_ky` chạy trong một transaction: giành phiếu bằng chính câu `UPDATE` (nên gọi tool hai lần cũng chỉ ghi danh một lần), rồi khóa dòng lớp bằng `SELECT ... FOR UPDATE` và đếm lại chỗ ngồi. Chính lần đếm thứ hai này mới là lần quyết định.
 
 **Hai lớp phòng thủ làm hai việc khác nhau.** Điều này được **đo, không phải suy đoán**. Chạy lại đúng kịch bản 20 luồng tranh một chỗ trên một bản sao đã bỏ `FOR UPDATE`, kết cuộc vẫn là 1 sinh viên trong lớp 1 chỗ: ràng buộc `CHECK (enrolled <= capacity)` giữ được phòng tuyến. Nhưng 19 người còn lại thất bại với `CheckViolation` do PostgreSQL ném ra, chứ không phải một lời từ chối có kiểm soát - trong dịch vụ đang chạy thì đó là lỗi 500 thay vì câu "lớp vừa hết chỗ, em chọn lớp khác nhé". Nói gọn: **`CHECK` bảo vệ tính đúng đắn của dữ liệu, `FOR UPDATE` bảo vệ chất lượng câu trả lời.**
@@ -158,10 +169,16 @@ Tạo database và cấu hình:
 
 ```bash
 createdb -U postgres academic_advisor
-copy .env.example .env          # rồi điền GEMINI_API_KEY và DATABASE_URL
+copy .env.example .env          # rồi điền GEMINI_API_KEY, DATABASE_URL và JWT_SECRET
 ```
 
 Lấy API key miễn phí tại https://aistudio.google.com/apikey
+
+Sinh khóa ký JWT (bắt buộc, tối thiểu 32 ký tự - service từ chối khởi động nếu thiếu hoặc quá ngắn, vì một khóa ký đoán được thì cũng như không có khóa ký):
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
 
 Khởi tạo dữ liệu:
 
@@ -182,10 +199,25 @@ Mở http://localhost:8000/docs để thử API.
 
 ## Sử dụng
 
+Đăng nhập trước để lấy access token. Mật khẩu của cả ba sinh viên mô phỏng là `Sinhvien@2026`, do `scripts/init_db.py` sinh ra và in ra màn hình.
+
+```bash
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"student_id\": \"22021001\", \"password\": \"Sinhvien@2026\"}"
+```
+
+```json
+{ "access_token": "eyJhbGciOiJIUzI1NiIs...", "token_type": "bearer", "expires_in": 3600 }
+```
+
+Rồi hỏi trợ lý. Chú ý là **không có `student_id` trong body**: mã sinh viên đến từ claim `sub` của token đã ký, và không đến từ đâu khác.
+
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d "{\"session_id\": \"demo\", \"student_id\": \"22021001\", \"message\": \"Dieu kien xet tot nghiep la gi?\"}"
+  -H "Authorization: Bearer <access_token>" \
+  -d "{\"session_id\": \"demo\", \"message\": \"Dieu kien xet tot nghiep la gi?\"}"
 ```
 
 Phản hồi trả về câu trả lời kèm danh sách tool đã gọi, số vòng lặp, độ trễ, số token và chi phí của chính request đó:
@@ -204,7 +236,8 @@ Phản hồi trả về câu trả lời kèm danh sách tool đã gọi, số v
 
 | Endpoint | Mô tả |
 |---|---|
-| `POST /chat` | Hỏi trợ lý |
+| `POST /auth/login` | Đổi mã sinh viên và mật khẩu lấy access token |
+| `POST /chat` | Hỏi trợ lý. **Cần `Authorization: Bearer <token>`** |
 | `GET /health` | Kiểm tra service và số đoạn tài liệu đã nạp |
 | `GET /metrics` | Chỉ số theo định dạng Prometheus |
 | `GET /stats` | Chỉ số dạng JSON, dễ đọc khi phát triển |
@@ -268,6 +301,7 @@ Tập trung vào phần không được phép sai:
 
 - Dữ liệu sinh viên là dữ liệu mô phỏng, không kết nối hệ thống quản lý đào tạo thật.
 - Tìm kiếm vector là quét toàn bộ, phù hợp với vài chục đến vài trăm đoạn; ở quy mô lớn cần chuyển sang pgvector hoặc Milvus.
-- Xác thực người dùng chưa được cài đặt: service giả định `student_id` đến từ một tầng đã xác thực sẵn, và không coi nó là dữ liệu người dùng nhập vào.
+- Bộ đếm khóa đăng nhập nằm trong bộ nhớ của tiến trình. Chạy nhiều bản sao sau load balancer thì mỗi bản giữ một bộ đếm riêng, nên kẻ tấn công rải đều các lần đoán qua các bản sao sẽ được nhiều lượt thử hơn. Ở quy mô này thì đây là đánh đổi đúng so với việc kéo thêm Redis vào, nhưng nếu chạy nhiều hơn một instance thì đây là thứ đầu tiên phải đưa ra ngoài.
+- Chưa có refresh token và chưa có danh sách thu hồi token. Access token sống 60 phút và không rút ngắn lại được trước hạn. Claim `jti` đã được ghi sẵn để một danh sách thu hồi có thể lấy làm khóa.
 - Chưa có tool hủy đăng ký. Sinh viên bị vượt trần tín chỉ hiện phải liên hệ phòng đào tạo để bỏ bớt môn.
 - Trạng thái cảnh báo học vụ mức 2 chưa được sinh ra tự động, vì dữ liệu mô phỏng không có lịch sử điểm theo từng học kỳ liên tiếp.
