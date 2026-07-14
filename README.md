@@ -6,6 +6,24 @@ Trợ lý cố vấn học tập kiêm đăng ký học phần, xây dựng theo
 
 ---
 
+## Tài liệu chi tiết
+
+README này là bản tóm tắt. Phần giải thích đầy đủ, kèm lý do đằng sau từng quyết định thiết kế, nằm trong [docs/](docs/):
+
+| Trang | Nội dung |
+|---|---|
+| [1. Tổng quan và kiến trúc](docs/01-tong-quan-va-kien-truc.md) | Bài toán, vì sao không đặt luật vào prompt, luồng của một request |
+| [2. Dữ liệu và lược đồ](docs/02-du-lieu-va-luoc-do.md) | Các bảng, ba ràng buộc đáng nói, dữ liệu mô phỏng được dựng có chủ đích |
+| [3. RAG pipeline](docs/03-rag-pipeline.md) | Cắt theo tiêu đề, vì sao không dùng pgvector, đo Recall và MRR |
+| [4. Agent loop](docs/04-agent-loop.md) | Vì sao tự viết vòng lặp, vì sao giới hạn 5 vòng, TurnContext |
+| [5. Guardrail](docs/05-guardrail.md) | Sáu luật, hai điều không lấy theo lời model, biến lời khai thành bằng chứng |
+| [6. Đồng thời và transaction](docs/06-dong-thoi-va-transaction.md) | Race condition, thí nghiệm bỏ `FOR UPDATE` và kết quả bất ngờ |
+| [7. Đo lường và chi phí](docs/07-do-luong-va-chi-phi.md) | Vì sao đo tiền song song với độ trễ, chi phí thực sự nằm ở đâu |
+| [8. Kiểm thử](docs/08-kiem-thu.md) | Test cái không được phép sai, và cái cố tình không test |
+| [9. Quyết định thiết kế](docs/09-quyet-dinh-thiet-ke.md) | Bảng đánh đổi, giới hạn đã biết, hướng phát triển |
+
+---
+
 ## Kiến trúc
 
 ```
