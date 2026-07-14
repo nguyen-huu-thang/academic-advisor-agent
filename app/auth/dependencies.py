@@ -10,6 +10,8 @@ mot ma sinh vien di vao duoc dich vu. Do chinh la muc dich: truoc kia `student_i
 body cua request, noi ai cung go duoc ma cua nguoi khac, roi cac tool cu the ma doc bang diem.
 """
 
+import hmac
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -40,6 +42,32 @@ def get_current_student(
         raise _unauthorised(f"Access token khong hop le: {error}") from error
 
     return claims["sub"]
+
+
+def require_ops_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> None:
+    """Guard the operational endpoints, which are not for students.
+
+    Canh cac endpoint van hanh, von khong danh cho sinh vien.
+
+    A student's access token deliberately does not open these. /metrics and /stats say what the
+    service costs to run and how often the guardrail fires; that is the operator's business, and
+    handing it to everyone who can log in would be handing out the bill.
+    Access token cua sinh vien co y khong mo duoc cac endpoint nay. /metrics va /stats noi len chi
+    phi van hanh dich vu va so lan guardrail chan; do la viec cua nguoi van hanh, va dua no cho moi
+    nguoi dang nhap duoc thi khac nao dua ca hoa don ra.
+    """
+    if credentials is None:
+        raise _unauthorised("Thieu token van hanh.")
+
+    expected = load_settings().metrics_token
+    # Constant-time, for the same reason the password check is: a plain `==` leaks how many
+    # leading characters were right through how long it took to say no.
+    # So sanh trong thoi gian hang dinh, cung ly do voi phep kiem tra mat khau: mot phep `==`
+    # thong thuong lo ra co bao nhieu ky tu dau da dung, qua chinh thoi gian no tra loi khong.
+    if not hmac.compare_digest(credentials.credentials, expected):
+        raise _unauthorised("Token van hanh khong hop le.")
 
 
 def _unauthorised(detail: str) -> HTTPException:

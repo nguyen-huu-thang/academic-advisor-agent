@@ -71,6 +71,15 @@ class Settings:
     access_token_ttl_minutes: int
     login_max_attempts: int
     login_lockout_minutes: int
+    # A separate secret for the operational endpoints, deliberately not the student's token.
+    # /metrics and /stats report what the service costs to run - token counts, USD spent, how
+    # often the guardrail fires - which is the operator's business and nobody else's. A student
+    # who can log in should not thereby be able to read the bill.
+    # Mot khoa bi mat rieng cho cac endpoint van hanh, co y khong dung token cua sinh vien.
+    # /metrics va /stats bao cao chi phi van hanh cua dich vu - so token, so tien USD da tieu, so
+    # lan guardrail chan - von la viec cua nguoi van hanh chu khong phai cua ai khac. Mot sinh vien
+    # dang nhap duoc thi khong vi the ma doc duoc hoa don.
+    metrics_token: str
     # The credit ceiling depends on how the student is doing, not on who is asking. A student
     # on academic warning is held to a lower ceiling so they can concentrate on fewer courses.
     # Tran tin chi phu thuoc vao ket qua hoc tap cua sinh vien, khong phu thuoc vao viec ai
@@ -108,6 +117,7 @@ def load_settings() -> Settings:
         access_token_ttl_minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "60")),
         login_max_attempts=int(os.getenv("LOGIN_MAX_ATTEMPTS", "5")),
         login_lockout_minutes=int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15")),
+        metrics_token=_require_secret("METRICS_TOKEN"),
         max_credits_by_status={
             "binh_thuong": int(os.getenv("MAX_CREDITS_BINH_THUONG", "24")),
             "canh_bao_1": int(os.getenv("MAX_CREDITS_CANH_BAO_1", "18")),

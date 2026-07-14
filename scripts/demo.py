@@ -10,6 +10,7 @@ import time
 
 import httpx
 
+from app.config import load_settings
 from app.db import close_pool, get_connection
 from scripts.init_db import DEMO_PASSWORD
 from scripts.init_db import main as seed_university_data
@@ -331,7 +332,14 @@ def main() -> None:
                 )
             print()
 
-        stats = http.get(f"{BASE_URL}/stats").json()
+        # /stats reports what the run cost to operate, so it is behind the operator's token, not
+        # behind a student's. The demo reads that token from the same .env the service does.
+        # /stats bao cao chi phi van hanh cua lan chay, nen no nam sau token cua nguoi van hanh,
+        # khong phai sau token cua sinh vien. Demo doc token do tu chinh file .env ma service dung.
+        stats = http.get(
+            f"{BASE_URL}/stats",
+            headers={"Authorization": f"Bearer {load_settings().metrics_token}"},
+        ).json()
         print("=" * 78)
         print("TONG KET")
         print("=" * 78)

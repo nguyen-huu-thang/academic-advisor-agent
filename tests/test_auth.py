@@ -18,7 +18,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from app.auth.dependencies import get_current_student
+from app.auth.dependencies import get_current_student, require_ops_token
 from app.auth.passwords import hash_password, verify_password
 from app.auth.throttle import LoginThrottle
 from app.auth.tokens import InvalidToken, decode_access_token, issue_access_token
@@ -26,6 +26,7 @@ from app.config import Settings
 
 SECRET = "a" * 48
 OTHER_SECRET = "b" * 48
+OPS_TOKEN = "c" * 48
 
 AN = "22021001"
 CUONG = "22021003"
@@ -48,6 +49,7 @@ def make_settings(**overrides) -> Settings:
         "access_token_ttl_minutes": 60,
         "login_max_attempts": 5,
         "login_lockout_minutes": 15,
+        "metrics_token": OPS_TOKEN,
     }
     values.update(overrides)
     return Settings(**values)
@@ -319,9 +321,9 @@ def test_throttle_locks_one_student_without_locking_another():
 
 @pytest.fixture
 def client(monkeypatch) -> TestClient:
-    """A tiny app carrying only the dependency, so the test needs no database and no Gemini.
+    """A tiny app carrying only the dependencies, so the test needs no database and no Gemini.
 
-    Mot app nho chi mang dependency, nen bai test khong can database va khong can Gemini.
+    Mot app nho chi mang cac dependency, nen bai test khong can database va khong can Gemini.
     """
     monkeypatch.setattr("app.auth.dependencies.load_settings", make_settings)
 
@@ -330,6 +332,10 @@ def client(monkeypatch) -> TestClient:
     @app.get("/whoami")
     def whoami(student_id: str = Depends(get_current_student)) -> dict:
         return {"student_id": student_id}
+
+    @app.get("/ops", dependencies=[Depends(require_ops_token)])
+    def ops() -> dict:
+        return {"cost_usd": 1.23}
 
     return TestClient(app)
 
@@ -354,6 +360,40 @@ def test_a_valid_token_identifies_exactly_the_student_it_names(client: TestClien
 
     assert response.status_code == 200
     assert response.json()["student_id"] == AN
+
+
+# Endpoint van hanh
+# The operational endpoints
+
+
+def test_ops_endpoint_refuses_a_request_without_a_token(client: TestClient):
+    assert client.get("/ops").status_code == 401
+
+
+def test_ops_endpoint_refuses_a_students_access_token(client: TestClient):
+    """A student who can log in must not thereby be able to read the bill.
+
+    Mot sinh vien dang nhap duoc thi khong vi the ma doc duoc hoa don.
+
+    This is the test that says the operational endpoints are not merely "behind some auth", but
+    behind a different auth: /metrics reports token counts, USD spent and how often the guardrail
+    fires, and none of that is a student's business.
+    Day la bai test khang dinh cac endpoint van hanh khong chi don gian la "nam sau mot lop xac
+    thuc nao do", ma nam sau MOT lop xac thuc KHAC: /metrics bao cao so token, so tien USD da tieu
+    va so lan guardrail chan, va khong thu nao trong so do la viec cua sinh vien.
+    """
+    token, _ = issue_access_token(AN, make_settings())
+
+    response = client.get("/ops", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+
+
+def test_ops_endpoint_accepts_the_operator_token(client: TestClient):
+    response = client.get("/ops", headers={"Authorization": f"Bearer {OPS_TOKEN}"})
+
+    assert response.status_code == 200
+    assert response.json()["cost_usd"] == 1.23
 
 
 def test_the_body_cannot_name_a_student():

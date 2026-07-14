@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.guardrail import mask_student_id
 from app.agent.loop import AdvisorAgent, StudentNotFound
-from app.auth.dependencies import get_current_student
+from app.auth.dependencies import get_current_student, require_ops_token
 from app.auth.service import authenticate
 from app.auth.throttle import LoginThrottle
 from app.auth.tokens import issue_access_token
@@ -197,11 +197,15 @@ def health(request: Request) -> dict:
     return {"status": "ok", "chunks_loaded": request.app.state.chunks_loaded}
 
 
-@router.get("/metrics", response_class=PlainTextResponse)
+@router.get(
+    "/metrics",
+    response_class=PlainTextResponse,
+    dependencies=[Depends(require_ops_token)],
+)
 def prometheus_metrics() -> str:
     return metrics.render_prometheus()
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_ops_token)])
 def stats() -> dict:
     return metrics.snapshot()
