@@ -45,6 +45,7 @@ class Metrics:
         self._errors = 0
         self._tool_calls: dict[str, int] = {}
         self._tool_denied = 0
+        self._refresh_reuse = 0
         self._input_tokens = 0
         self._output_tokens = 0
         self._cost_usd = 0.0
@@ -74,6 +75,23 @@ class Metrics:
             if not allowed:
                 self._tool_denied += 1
 
+    def record_refresh_reuse(self) -> None:
+        """A refresh token that had already been spent was presented again.
+
+        Mot refresh token da bi tieu roi lai duoc trinh ra lan nua.
+
+        This is a security counter, not a performance one, and it should normally read zero. A
+        non-zero value means either a token was replayed by someone who should not have it, or a
+        client is retrying refreshes badly. Both are worth waking someone up for; neither is
+        visible anywhere else.
+        Day la mot bo dem an toan, khong phai hieu nang, va binh thuong no phai bang khong. Mot gia
+        tri khac khong nghia la hoac mot token da bi dung lai boi nguoi le ra khong duoc cam no,
+        hoac mot client dang gui lai lenh refresh sai cach. Ca hai deu dang danh thuc nguoi truc
+        day; va ca hai deu khong nhin thay duoc o bat cu dau khac.
+        """
+        with self._lock:
+            self._refresh_reuse += 1
+
     def snapshot(self) -> dict:
         with self._lock:
             latencies = np.asarray(self._latencies_ms, dtype=np.float64)
@@ -82,6 +100,7 @@ class Metrics:
                 "errors": self._errors,
                 "tool_calls": dict(self._tool_calls),
                 "tool_denied": self._tool_denied,
+                "refresh_reuse": self._refresh_reuse,
                 "input_tokens": self._input_tokens,
                 "output_tokens": self._output_tokens,
                 "cost_usd": round(self._cost_usd, 6),
@@ -105,6 +124,9 @@ class Metrics:
             "# HELP agent_tool_denied_total So lan guardrail chan mot lenh goi tool.",
             "# TYPE agent_tool_denied_total counter",
             f"agent_tool_denied_total {snap['tool_denied']}",
+            "# HELP agent_refresh_reuse_total So lan mot refresh token da dung bi trinh ra lai.",
+            "# TYPE agent_refresh_reuse_total counter",
+            f"agent_refresh_reuse_total {snap['refresh_reuse']}",
             "# HELP agent_tokens_total Tong so token da dung.",
             "# TYPE agent_tokens_total counter",
             f'agent_tokens_total{{direction="input"}} {snap["input_tokens"]}',
