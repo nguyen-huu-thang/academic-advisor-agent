@@ -13,16 +13,19 @@ Câu trả lời của model diễn đạt hơi khác đi thì không sao. Một
 Nên nỗ lực kiểm thử dồn vào đúng những chỗ đó.
 
 ```
-44 test, chạy trong khoảng 2 giây
+69 test, chạy trong khoảng 3 giây
 ```
 
 | Nhóm | Số test | Cần database? |
 |---|---|---|
 | Guardrail | 26 | Không |
-| Tranh chấp đồng thời | 3 | **Có** |
-| Cắt tài liệu | 6 | Không |
+| Xác thực (mật khẩu, JWT, khóa đăng nhập) | 25 | Không |
+| Retry và rate limit | 6 | Không |
 | Đo chi phí và metrics | 5 | Không |
-| Retry và rate limit | 4 | Không |
+| Cắt tài liệu | 4 | Không |
+| Tranh chấp đồng thời | 3 | **Có** |
+
+Chỉ 3 trên 69 test cần tới database. Đó không phải may mắn: cả guardrail lẫn tầng xác thực đều là hàm thuần, và đồng hồ được truyền vào chứ không đọc tại chỗ.
 
 ```bash
 pytest tests -q                          # toàn bộ

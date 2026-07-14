@@ -258,6 +258,49 @@ def test_throttle_forgets_failures_after_a_successful_login():
     assert throttle.seconds_until_unlocked(AN, now=0.0) is None
 
 
+def test_throttle_forgets_failures_once_the_window_has_passed():
+    """Five slips spread over a year is a forgetful student, not an attacker.
+
+    Nam lan lo tay rai rac ca nam la mot sinh vien hay quen, khong phai mot ke tan cong.
+
+    Without a window the counter only ever climbs, so someone who mistypes their password once a
+    month would be locked out on the fifth month, having done nothing wrong.
+    Neu khong co cua so thoi gian thi bo dem chi co tang, nen mot nguoi mot thang go nham mat khau
+    mot lan se bi khoa tai khoan vao thang thu nam, du khong lam gi sai ca.
+    """
+    throttle = LoginThrottle(max_attempts=3, lockout_seconds=900)
+
+    for month in range(10):
+        throttle.record_failure(AN, now=month * 30 * 86400.0)
+        assert throttle.seconds_until_unlocked(AN, now=month * 30 * 86400.0) is None
+
+
+def test_throttle_still_locks_five_quick_failures_inside_the_window():
+    """The other side of the window: bunched failures must still lock.
+
+    Mat con lai cua cua so thoi gian: cac lan sai don dap thi van phai bi khoa.
+    """
+    throttle = LoginThrottle(max_attempts=3, lockout_seconds=900)
+
+    for second in range(3):
+        throttle.record_failure(AN, now=float(second))
+
+    assert throttle.seconds_until_unlocked(AN, now=3.0) is not None
+
+
+def test_throttle_does_not_grow_without_bound():
+    """A flood of invented student ids must not be a way to eat the service's memory.
+
+    Mot tran lut cac ma sinh vien bia ra khong duoc phep tro thanh cach an mon bo nho dich vu.
+    """
+    throttle = LoginThrottle(max_attempts=5, lockout_seconds=900, max_tracked_keys=100)
+
+    for i in range(5_000):
+        throttle.record_failure(f"ma-bia-{i}", now=1.0)
+
+    assert len(throttle._by_key) <= 100
+
+
 def test_throttle_locks_one_student_without_locking_another():
     """Otherwise anyone could lock a classmate out by guessing their password wrongly on purpose.
 

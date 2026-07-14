@@ -292,6 +292,7 @@ pytest tests -q -m "not integration"     # chỉ unit test, không cần databas
 Tập trung vào phần không được phép sai:
 
 - **26 test cho guardrail**: sáu luật đăng ký, hai bước xác nhận, chặn tool lạ, và các trường hợp biên (chạm đúng trần tín chỉ thì được phép; chồng đúng một tiết thì đã là trùng lịch).
+- **25 test cho tầng xác thực**: đổi `sub` sang mã người khác thì chữ ký vỡ; `alg: none` bị từ chối; token thiếu `exp` bị từ chối vì token không hạn thì sống vĩnh viễn; bản băm rỗng của một lần đổi lược đồ dở dang không bao giờ đăng nhập được; khóa một sinh viên không được khóa lây người khác; và `student_id` không còn là một trường của `ChatRequest`.
 - **3 test tranh chấp đồng thời** (cần PostgreSQL): 20 luồng cùng giành chỗ cuối của một lớp thì đúng một luồng thắng và 19 luồng còn lại phải bị từ chối **đúng theo đường đã thiết kế**, không phải chết vì lỗi database thô. Cộng thêm test xác nhận hai lần chỉ ghi danh một lần, và test chứng minh `CHECK` constraint chặn được cả khi code sai.
 - Cắt tài liệu, tính chi phí, và xử lý rate limit.
 
