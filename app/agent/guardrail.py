@@ -216,7 +216,7 @@ def _check_register_prepare(context: TurnContext) -> Decision:
     """
     if context.target is None:
         return Decision(allowed=False, note="Khong tim thay lop hoc phan nay.")
-    return _check_registration_rules(context.target, context)
+    return check_registration_rules(context.target, context)
 
 
 def _check_register_confirm(context: TurnContext) -> Decision:
@@ -290,10 +290,10 @@ def _check_register_confirm(context: TurnContext) -> Decision:
     # Cac quy tac duoc kiem tra lai, va lan nay moi la lan kiem tra co hieu luc. Giua hai luot,
     # sinh vien co the da dang ky them mot lop khac, du de day em vuot tran tin chi hoac roi
     # vao mot tinh huong trung lich chua he ton tai luc phieu duoc ghi ra.
-    return _check_registration_rules(context.target, context)
+    return check_registration_rules(context.target, context)
 
 
-def _check_registration_rules(target: ClassSection, context: TurnContext) -> Decision:
+def check_registration_rules(target: ClassSection, context: TurnContext) -> Decision:
     """The six rules that decide whether a student may join a class.
 
     Sau quy tac quyet dinh sinh vien co duoc vao mot lop hay khong.

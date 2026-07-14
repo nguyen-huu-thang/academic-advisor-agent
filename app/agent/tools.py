@@ -36,7 +36,9 @@ from app.agent.guardrail import (
     PendingRegistration,
     RegisteredClass,
     TurnContext,
+    check_registration_rules,
 )
+from app.config import Settings
 from app.db import get_connection
 from app.grading import PASS_MARK, compute_gpa, grade_point, is_passed, letter_grade
 from app.rag.retriever import Retriever
@@ -214,6 +216,18 @@ def load_student(student_id: str) -> dict | None:
         ).fetchone()
 
 
+# Each of these comes in two forms on purpose. The public one opens its own connection and is
+# what the agent calls before the model runs. The private one takes a connection it is given, and
+# is what the confirmation transaction calls - because a fact re-read on a *different* connection
+# would be read outside the transaction, would not see the locks that transaction holds, and so
+# would be exactly the stale fact the lock was taken to avoid.
+# Moi ham duoi day co hai dang, va do la co y. Dang cong khai tu mo ket noi rieng, va la dang ma
+# agent goi truoc khi model chay. Dang rieng tu thi nhan mot ket noi duoc dua cho, va la dang ma
+# transaction xac nhan goi - boi mot su that doc lai tren mot ket noi KHAC thi se duoc doc ben
+# ngoai transaction, se khong nhin thay cac khoa ma transaction do dang giu, va vi vay se dung la
+# cai su that cu ky ma cai khoa sinh ra de tranh.
+
+
 def load_passed_courses(student_id: str) -> frozenset[str]:
     """The courses this student has actually passed, straight from the grade table.
 
@@ -225,27 +239,35 @@ def load_passed_courses(student_id: str) -> frozenset[str]:
     nhan. Sinh vien noi gi, va model co tin theo hay khong, khong lien quan gi o day.
     """
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT course_code FROM grades WHERE student_id = %s AND passed",
-            (student_id,),
-        ).fetchall()
+        return _passed_courses(conn, student_id)
+
+
+def _passed_courses(conn, student_id: str) -> frozenset[str]:
+    rows = conn.execute(
+        "SELECT course_code FROM grades WHERE student_id = %s AND passed",
+        (student_id,),
+    ).fetchall()
     return frozenset(row["course_code"] for row in rows)
 
 
 def load_registered(student_id: str, semester: str) -> tuple[RegisteredClass, ...]:
     with get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT s.id, e.course_code, c.course_name, c.credits,
-                   s.day_of_week, s.start_period, s.end_period
-            FROM enrollments e
-            JOIN class_sections s ON s.id = e.class_section_id
-            JOIN courses c ON c.course_code = e.course_code
-            WHERE e.student_id = %s AND e.semester = %s
-            ORDER BY s.day_of_week, s.start_period
-            """,
-            (student_id, semester),
-        ).fetchall()
+        return _registered(conn, student_id, semester)
+
+
+def _registered(conn, student_id: str, semester: str) -> tuple[RegisteredClass, ...]:
+    rows = conn.execute(
+        """
+        SELECT s.id, e.course_code, c.course_name, c.credits,
+               s.day_of_week, s.start_period, s.end_period
+        FROM enrollments e
+        JOIN class_sections s ON s.id = e.class_section_id
+        JOIN courses c ON c.course_code = e.course_code
+        WHERE e.student_id = %s AND e.semester = %s
+        ORDER BY s.day_of_week, s.start_period
+        """,
+        (student_id, semester),
+    ).fetchall()
 
     return tuple(
         RegisteredClass(
@@ -272,13 +294,17 @@ def is_registration_open(semester: str) -> bool:
     khong the mo lai mot dot dang ky von da dong.
     """
     with get_connection() as conn:
-        row = conn.execute(
-            """
-            SELECT (now() BETWEEN opens_at AND closes_at) AS is_open
-            FROM registration_windows WHERE semester = %s
-            """,
-            (semester,),
-        ).fetchone()
+        return _registration_open(conn, semester)
+
+
+def _registration_open(conn, semester: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT (now() BETWEEN opens_at AND closes_at) AS is_open
+        FROM registration_windows WHERE semester = %s
+        """,
+        (semester,),
+    ).fetchone()
     return bool(row and row["is_open"])
 
 
@@ -339,10 +365,11 @@ def load_pending_registration(slip_id: str) -> PendingRegistration | None:
 
 
 class ToolExecutor:
-    def __init__(self, retriever: Retriever, *, retrieval_top_k: int, semester: str) -> None:
+    def __init__(self, retriever: Retriever, settings: Settings) -> None:
         self._retriever = retriever
-        self._retrieval_top_k = retrieval_top_k
-        self._semester = semester
+        self._settings = settings
+        self._retrieval_top_k = settings.retrieval_top_k
+        self._semester = settings.current_semester
 
     def execute(self, tool_name: str, arguments: dict, context: TurnContext) -> dict:
         handlers = {
@@ -704,7 +731,7 @@ class ToolExecutor:
         try:
             with get_connection() as conn:
                 with conn.transaction():
-                    return execute_registration(conn, slip_id)
+                    return execute_registration(conn, slip_id, self._settings)
         except RegistrationRejected as rejection:
             # Raised inside the transaction, so PostgreSQL has rolled everything back, including
             # the slip we had marked as executed. It goes back to waiting.
@@ -713,10 +740,26 @@ class ToolExecutor:
             return {"loi": str(rejection)}
 
 
-def execute_registration(conn, slip_id: str) -> dict:
+def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     """Enrol the student named on the slip, or refuse. Runs inside a transaction.
 
     Ghi danh sinh vien ghi tren phieu, hoac tu choi. Chay ben trong mot transaction.
+
+    The guardrail has already approved this call, and none of that approval is trusted here. It
+    was made against facts read at the start of the turn, on another connection, outside every
+    transaction. Between then and now another confirmation may have gone through - for this same
+    student, or for this same class - and every one of those facts may have moved.
+
+    So the six rules are run again, here, over facts re-read under lock. This is the run that
+    counts; the earlier one only existed to tell the student early.
+
+    Guardrail da duyet loi goi nay, va o day khong tin vao su phe duyet do chut nao. No duoc dua
+    ra dua tren nhung su that doc tu dau luot, tren mot ket noi khac, ben ngoai moi transaction.
+    Tu luc do den gio, mot lenh xac nhan khac hoan toan co the da di qua - cua chinh sinh vien
+    nay, hoac vao chinh lop nay - va moi su that kia deu co the da doi.
+
+    Vi vay sau quy tac duoc chay lai, tai day, tren nhung su that doc lai duoi khoa. Day moi la
+    lan chay co hieu luc; lan truoc do chi ton tai de bao som cho sinh vien.
 
     Exposed at module level rather than kept as a method so the concurrency test can fire it
     from many threads at once without standing up an agent.
@@ -734,7 +777,7 @@ def execute_registration(conn, slip_id: str) -> dict:
         UPDATE pending_registrations
         SET status = 'da_thuc_hien'
         WHERE id = %s AND status = 'cho_xac_nhan' AND expires_at > now()
-        RETURNING student_id, class_section_id
+        RETURNING student_id, session_id, created_turn_id, class_section_id
         """,
         (slip_id,),
     ).fetchone()
@@ -747,6 +790,45 @@ def execute_registration(conn, slip_id: str) -> dict:
     student_id = claimed["student_id"]
     section_id = claimed["class_section_id"]
 
+    # Lock the STUDENT row, before anything else about this student is read.
+    #
+    # This is the lock that closes the hole the class lock never covered. The class lock protects
+    # the seat count, which is contested between *different* students. But the credit ceiling and
+    # the timetable clash are properties of *one* student's set of enrolments, and they are
+    # contested when that same student confirms two slips at once - two browser tabs, a retried
+    # request, a model that fires both confirmations in one response. Both would read the same
+    # stale list of enrolments, both would find room under the ceiling, and both would go through,
+    # leaving the student in two classes that clash or past the credit cap.
+    #
+    # Holding this row makes every confirmation for this student queue behind the one in front of
+    # it, so the enrolments read below are the enrolments as of now, not as of the start of the
+    # turn.
+    #
+    # Khoa dong SINH VIEN, truoc khi doc bat cu thu gi khac ve sinh vien nay.
+    #
+    # Day la cai khoa bit lai lo hong ma khoa lop khong bao gio cham toi. Khoa lop bao ve si so,
+    # von bi tranh chap giua NHUNG sinh vien khac nhau. Nhung tran tin chi va viec trung lich lai
+    # la thuoc tinh cua tap cac lop cua MOT sinh vien, va chung bi tranh chap khi chinh sinh vien
+    # do xac nhan hai phieu cung luc - hai tab trinh duyet, mot request bi gui lai, hay mot model
+    # goi ca hai lenh xac nhan trong cung mot cau tra loi. Ca hai deu se doc cung mot danh sach lop
+    # cu ky, ca hai deu thay con cho duoi tran, va ca hai deu di qua, de lai sinh vien trong hai
+    # lop trung lich nhau hoac vuot tran tin chi.
+    #
+    # Giu dong nay khien moi lenh xac nhan cua sinh vien nay phai xep hang sau lenh dang chay, nen
+    # danh sach lop doc o duoi la danh sach tai thoi diem nay, khong phai tu dau luot.
+    #
+    # The order matters and is fixed everywhere: student first, then class. Two transactions that
+    # took them in opposite orders would sooner or later wait on each other for ever.
+    # Thu tu khoa la quan trong va duoc co dinh o khap noi: sinh vien truoc, lop sau. Hai
+    # transaction lay hai khoa nay theo hai thu tu nguoc nhau thi som muon cung se cho nhau mai mai.
+    student = conn.execute(
+        "SELECT student_id, academic_status FROM students WHERE student_id = %s FOR UPDATE",
+        (student_id,),
+    ).fetchone()
+
+    if student is None:
+        raise RegistrationRejected("Khong tim thay sinh vien cua phieu dang ky nay.")
+
     # Lock the class row. Every other confirmation for this same class now queues up behind this
     # statement, so the seat count read below cannot change under our feet between reading it
     # and acting on it.
@@ -756,8 +838,8 @@ def execute_registration(conn, slip_id: str) -> dict:
     # simultaneous confirmations still failed, but they failed as a CheckViolation raised by
     # PostgreSQL. What the lock buys is the *quality of the refusal*. Without it, 19 students
     # get a raw constraint error that surfaces as "the tool crashed"; with it, they get
-    # "the class just filled up, please pick another one". Correctness and a usable answer are
-    # two different problems, and they are solved by two different lines of defence.
+    # "the class is full, please pick another one". Correctness and a usable answer are two
+    # different problems, and they are solved by two different lines of defence.
     #
     # Khoa dong cua lop. Moi lenh xac nhan khac vao cung lop nay tu gio phai xep hang sau cau
     # lenh nay, nen si so doc o duoi khong the doi ngay duoi chan ta trong khoang giua luc doc
@@ -767,12 +849,13 @@ def execute_registration(conn, slip_id: str) -> dict:
     # da lam viec do roi, va dieu nay da duoc do that: khi bo khoa di, 19 tren 20 lenh xac nhan
     # dong thoi van that bai, nhung chung that bai duoi dang CheckViolation do PostgreSQL nem
     # ra. Thu ma cai khoa mua ve la *chat luong cua loi tu choi*. Khong co no, 19 sinh vien nhan
-    # mot loi rang buoc tho, lo ra ngoai thanh "tool bi loi"; co no, ho nhan duoc cau "lop vua
-    # het cho, em chon lop khac nhe". Du lieu dung va cau tra loi dung la hai bai toan khac nhau,
+    # mot loi rang buoc tho, lo ra ngoai thanh "tool bi loi"; co no, ho nhan duoc cau "lop da du
+    # si so, em chon lop khac nhe". Du lieu dung va cau tra loi dung la hai bai toan khac nhau,
     # va chung duoc giai bang hai lop phong thu khac nhau.
     section = conn.execute(
         """
-        SELECT s.course_code, s.section_no, s.semester, s.capacity, s.enrolled, c.course_name
+        SELECT s.id, s.course_code, c.course_name, s.section_no, c.credits, s.semester,
+               s.capacity, s.enrolled, s.day_of_week, s.start_period, s.end_period
         FROM class_sections s
         JOIN courses c ON c.course_code = s.course_code
         WHERE s.id = %s
@@ -781,18 +864,62 @@ def execute_registration(conn, slip_id: str) -> dict:
         (section_id,),
     ).fetchone()
 
-    if section["enrolled"] >= section["capacity"]:
-        raise RegistrationRejected(
-            f"Lop {section['course_code']} nhom {section['section_no']} vua het cho "
-            f"(da du {section['capacity']} sinh vien). Hay chon lop khac cua cung hoc phan."
-        )
+    if section is None:
+        raise RegistrationRejected("Khong tim thay lop hoc phan cua phieu dang ky nay.")
+
+    semester = section["semester"]
+    prereqs = conn.execute(
+        "SELECT prereq_code FROM prerequisites WHERE course_code = %s",
+        (section["course_code"],),
+    ).fetchall()
+
+    target = ClassSection(
+        id=section["id"],
+        course_code=section["course_code"],
+        course_name=section["course_name"],
+        section_no=section["section_no"],
+        credits=section["credits"],
+        capacity=section["capacity"],
+        enrolled=section["enrolled"],
+        day_of_week=section["day_of_week"],
+        start_period=section["start_period"],
+        end_period=section["end_period"],
+        prereq_codes=frozenset(row["prereq_code"] for row in prereqs),
+    )
+
+    academic_status = student["academic_status"]
+
+    # Rebuilt entirely from what this transaction can see, holding both locks. The very same pure
+    # function the guardrail used is run again over it - the rules are not restated here, because
+    # two copies of six rules would eventually disagree, and the copy that disagreed silently
+    # would be the one guarding the write.
+    # Dung lai hoan toan tu nhung gi transaction nay nhin thay, khi dang giu ca hai khoa. Chinh
+    # dung ham thuan ma guardrail da dung se duoc chay lai tren no - cac quy tac khong duoc viet
+    # lai o day, boi hai ban sao cua sau quy tac roi se co luc lech nhau, va ban sao lech mot cach
+    # am tham se dung la ban dang canh lenh ghi.
+    fresh = TurnContext(
+        student_id=student_id,
+        session_id=claimed["session_id"],
+        turn_id=claimed["created_turn_id"],
+        semester=semester,
+        academic_status=academic_status,
+        max_credits=settings.max_credits_for(academic_status),
+        registration_open=_registration_open(conn, semester),
+        passed_courses=_passed_courses(conn, student_id),
+        registered=_registered(conn, student_id, semester),
+        target=target,
+    )
+
+    decision = check_registration_rules(target, fresh)
+    if not decision.allowed:
+        raise RegistrationRejected(decision.note or "Lenh dang ky bi tu choi.")
 
     conn.execute(
         """
         INSERT INTO enrollments (student_id, class_section_id, course_code, semester)
         VALUES (%s, %s, %s, %s)
         """,
-        (student_id, section_id, section["course_code"], section["semester"]),
+        (student_id, section_id, section["course_code"], semester),
     )
     conn.execute(
         "UPDATE class_sections SET enrolled = enrolled + 1 WHERE id = %s",
@@ -810,7 +937,7 @@ def execute_registration(conn, slip_id: str) -> dict:
         "ma_mon": section["course_code"],
         "ten_mon": section["course_name"],
         "nhom": section["section_no"],
-        "hoc_ky": section["semester"],
+        "hoc_ky": semester,
         "si_so_sau_dang_ky": f"{updated['enrolled']}/{updated['capacity']}",
     }
 

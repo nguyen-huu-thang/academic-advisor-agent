@@ -37,11 +37,7 @@ async def lifespan(app: FastAPI):
     chunks_loaded = retriever.load()
     logger.info("Da nap %d doan tai lieu vao bo nho.", chunks_loaded)
 
-    executor = ToolExecutor(
-        retriever,
-        retrieval_top_k=settings.retrieval_top_k,
-        semester=settings.current_semester,
-    )
+    executor = ToolExecutor(retriever, settings)
     app.state.agent = AdvisorAgent(client, executor, ConversationMemory(), settings)
     app.state.chunks_loaded = chunks_loaded
 
