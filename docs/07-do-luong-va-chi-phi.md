@@ -18,13 +18,18 @@ Vì vậy `/metrics` xuất chi phí như một counter Prometheus, ngang hàng 
 agent_requests_total          So request da xu ly
 agent_errors_total            So request bi loi
 agent_tool_denied_total       So lan guardrail chan mot lenh goi tool
+agent_refresh_reuse_total     So lan mot refresh token da dung bi trinh ra lai
 agent_tokens_total{direction} Token vao / token ra
 agent_cost_usd_total          Chi phi uoc tinh (USD)
 agent_latency_ms{quantile}    p50 / p95 / p99
 agent_tool_calls_total{tool}  So lan tung tool duoc goi
 ```
 
-`agent_tool_denied_total` đáng chú ý: nó là chỉ số về **an toàn**, không phải về hiệu năng. Nếu con số này đột nhiên tăng vọt, hoặc là dữ liệu đang sai, hoặc là có ai đó đang thử tấn công hệ thống. Cả hai đều đáng biết.
+Hai chỉ số đáng chú ý ở đây là chỉ số về **an toàn**, không phải về hiệu năng.
+
+`agent_tool_denied_total`: nếu con số này đột nhiên tăng vọt, hoặc là dữ liệu đang sai, hoặc là có ai đó đang thử tấn công hệ thống. Cả hai đều đáng biết.
+
+`agent_refresh_reuse_total`: **bình thường nó phải bằng 0**. Một giá trị khác 0 nghĩa là hoặc một refresh token đã bị dùng lại bởi người lẽ ra không được cầm nó, hoặc một client đang gửi lại lệnh refresh sai cách. Cái thứ nhất đáng đánh thức người trực dậy; cái thứ hai là một cái bug cần sửa. Và không cái nào nhìn thấy được ở bất cứ đâu khác.
 
 ## Hai endpoint này không dành cho sinh viên
 

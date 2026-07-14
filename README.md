@@ -109,6 +109,24 @@ Token của An + "student_id": "22021003" (Cường) trong body
   -> tool_audit_log ghi: student_id = 22021001                  (không phải 22021003)
 ```
 
+**Hai loại token, hai đánh đổi ngược nhau, cả hai đều có chủ đích.** Access token là JWT và **không được lưu ở đâu cả**: nó chỉ được kiểm tra bằng chữ ký, nên phục vụ một request không tốn một vòng gọi database nào. Cái giá phải trả là không rút lại được trước hạn - và đó chính là lý do nó chỉ sống **15 phút**. Thời gian sống của nó *chính là* độ trễ của việc thu hồi, và cái giá đó đáng được gọi tên ra thay vì để ngầm.
+
+Refresh token thì ngược lại: sống 14 ngày, nên **bắt buộc phải thu hồi được**, mà một thứ chỉ thu hồi được khi ở đâu đó có một dòng ghi rằng nó còn hiệu lực. Nó lại chỉ được trình ra 15 phút một lần chứ không phải mỗi request, nên phép tra cứu đó không tốn gì đáng kể. **Không trạng thái ở chỗ nóng, có trạng thái ở chỗ bắt buộc phải thu hồi được.**
+
+**Xoay vòng, và phát hiện tái sử dụng.** Mỗi lần refresh sinh ra một refresh token mới và giết token cũ. Nên một token bị sao chép trên đường truyền chỉ còn giá trị **cho tới lần refresh tiếp theo của chủ thật sự**, thay vì còn giá trị suốt hai tuần.
+
+Nhưng câu hỏi khó không phải là cấp token mới. Câu hỏi khó là: **một token đã tiêu rồi mà lại xuất hiện lần nữa thì sao?**
+
+Hoặc kẻ trộm đang tiêu bản sao sau lưng sinh viên, hoặc chính sinh viên đang gửi lại một request mà câu trả lời không bao giờ tới nơi. **Không có cách nào phân biệt được hai trường hợp đó.** Nên service giả định trường hợp xấu hơn và **thu hồi cả họ token** của lần đăng nhập đó - kể cả token mà sinh viên đang cầm một cách hoàn toàn chính đáng.
+
+```text
+Kẻ trộm dùng lại token cũ  -> 401, cả họ token bị thu hồi
+Token thật của sinh viên   -> 401, chết theo
+agent_refresh_reuse_total  -> 1
+```
+
+Nghe thì nghiệt ngã, nhưng đó là đánh đổi đúng: bị đăng xuất là một **sự phiền toái khắc phục được**, còn một phiên đang sống trong tay kẻ trộm thì **không**.
+
 **Tranh chấp chỗ cuối cùng.** Guardrail đọc sĩ số ở ngoài mọi transaction, từ trước khi model được hỏi phải làm gì. Đến lúc một lệnh xác nhận thực sự chạy, con số đó có thể đã cũ. Vì vậy `xac_nhan_dang_ky` chạy trong một transaction: giành phiếu bằng chính câu `UPDATE` (nên gọi tool hai lần cũng chỉ ghi danh một lần), rồi khóa dòng lớp bằng `SELECT ... FOR UPDATE` và đếm lại chỗ ngồi. Chính lần đếm thứ hai này mới là lần quyết định.
 
 **Hai lớp phòng thủ làm hai việc khác nhau.** Điều này được **đo, không phải suy đoán**. Chạy lại đúng kịch bản 20 luồng tranh một chỗ trên một bản sao đã bỏ `FOR UPDATE`, kết cuộc vẫn là 1 sinh viên trong lớp 1 chỗ: ràng buộc `CHECK (enrolled <= capacity)` giữ được phòng tuyến. Nhưng 19 người còn lại thất bại với `CheckViolation` do PostgreSQL ném ra, chứ không phải một lời từ chối có kiểm soát - trong dịch vụ đang chạy thì đó là lỗi 500 thay vì câu "lớp vừa hết chỗ, em chọn lớp khác nhé". Nói gọn: **`CHECK` bảo vệ tính đúng đắn của dữ liệu, `FOR UPDATE` bảo vệ chất lượng câu trả lời.**
@@ -202,13 +220,31 @@ Mở http://localhost:8000/docs để thử API.
 Đăng nhập trước để lấy access token. Mật khẩu của cả ba sinh viên mô phỏng là `Sinhvien@2026`, do `scripts/init_db.py` sinh ra và in ra màn hình.
 
 ```bash
-curl -X POST http://localhost:8000/auth/login \
+curl -c cookies.txt -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d "{\"student_id\": \"22021001\", \"password\": \"Sinhvien@2026\"}"
 ```
 
+Hai thứ quay về, và chúng đi bằng hai đường khác nhau **một cách có chủ đích**:
+
 ```json
-{ "access_token": "eyJhbGciOiJIUzI1NiIs...", "token_type": "bearer", "expires_in": 3600 }
+{ "access_token": "eyJhbGciOiJIUzI1NiIs...", "token_type": "bearer", "expires_in": 900 }
+```
+
+```text
+Set-Cookie: refresh_token=...; HttpOnly; Max-Age=1209600; Path=/auth/session; SameSite=strict
+```
+
+**Access token** nằm trong body, sống 15 phút, và frontend giữ nó trong RAM - không bao giờ bỏ vào `localStorage`.
+
+**Refresh token** nằm trong cookie `HttpOnly` nên JavaScript **không đọc được**. Một lỗ hổng XSS, vốn là cách phổ biến nhất để token bị đánh cắp trên trình duyệt, không chạm tới được cái chứng chỉ sống hai tuần này. Còn cái mà script chạm tới được thì chỉ đáng giá 15 phút.
+
+Cookie mang `Path=/auth/session`, nên trình duyệt **không** đính kèm nó vào `/chat` hay `/auth/login`. Một chứng chỉ không được gửi đi là một chứng chỉ không thể bị lộ bởi thứ xử lý cái request nó không được gửi tới.
+
+Khi access token hết hạn, đổi lấy cái mới. Refresh token **cũng bị xoay vòng** trong cùng lời gọi đó:
+
+```bash
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:8000/auth/session/refresh
 ```
 
 Rồi hỏi trợ lý. Chú ý là **không có `student_id` trong body**: mã sinh viên đến từ claim `sub` của token đã ký, và không đến từ đâu khác.
@@ -236,7 +272,9 @@ Phản hồi trả về câu trả lời kèm danh sách tool đã gọi, số v
 
 | Endpoint | Mô tả |
 |---|---|
-| `POST /auth/login` | Đổi mã sinh viên và mật khẩu lấy access token |
+| `POST /auth/login` | Đổi mã sinh viên và mật khẩu lấy access token (body) và refresh token (cookie HttpOnly) |
+| `POST /auth/session/refresh` | Tiêu refresh cookie, nhận access token mới và refresh cookie mới |
+| `POST /auth/session/logout` | Thu hồi cả họ token của lần đăng nhập này |
 | `POST /chat` | Hỏi trợ lý. Cần `Authorization: Bearer <access_token>` |
 | `GET /health` | Kiểm tra service và số đoạn tài liệu đã nạp. Công khai, vì load balancer cần gọi được |
 | `GET /metrics` | Chỉ số theo định dạng Prometheus. Cần `Authorization: Bearer <METRICS_TOKEN>` |
@@ -294,7 +332,8 @@ pytest tests -q -m "not integration"     # chỉ unit test, không cần databas
 Tập trung vào phần không được phép sai:
 
 - **26 test cho guardrail**: sáu luật đăng ký, hai bước xác nhận, chặn tool lạ, và các trường hợp biên (chạm đúng trần tín chỉ thì được phép; chồng đúng một tiết thì đã là trùng lịch).
-- **28 test cho tầng xác thực**: đổi `sub` sang mã người khác thì chữ ký vỡ; `alg: none` bị từ chối; token thiếu `exp` bị từ chối vì token không hạn thì sống vĩnh viễn; bản băm rỗng của một lần đổi lược đồ dở dang không bao giờ đăng nhập được; khóa một sinh viên không được khóa lây người khác; token của sinh viên **không** mở được `/metrics`; và `student_id` không còn là một trường của `ChatRequest`.
+- **30 test cho tầng xác thực**: đổi `sub` sang mã người khác thì chữ ký vỡ; `alg: none` bị từ chối; token thiếu `exp` bị từ chối vì token không hạn thì sống vĩnh viễn; bản băm rỗng của một lần đổi lược đồ dở dang không bao giờ đăng nhập được; khóa một sinh viên không được khóa lây người khác; token của sinh viên **không** mở được `/metrics`; và `student_id` không còn là một trường của `ChatRequest`.
+- **9 test cho refresh token** (cần PostgreSQL): xoay vòng giết token cũ; cả chuỗi nằm trong một họ; mỗi lần đăng nhập mở một họ riêng nên đăng nhập trên điện thoại không làm phiền máy tính; **dùng lại một token đã tiêu thì thu hồi cả họ**, kể cả token thật của sinh viên; thu hồi họ này không đụng họ khác; đăng xuất giết cả token cha chứ không chỉ token đang cầm; và 20 luồng cùng trình một token thì đúng một luồng được phục vụ.
 - **4 test tranh chấp đồng thời** (cần PostgreSQL): 20 luồng cùng giành chỗ cuối của một lớp thì đúng một luồng thắng và 19 luồng còn lại phải bị từ chối **đúng theo đường đã thiết kế**, không phải chết vì lỗi database thô. Một sinh viên xác nhận hai lớp **trùng lịch** cùng lúc thì đúng một lớp lọt. Cộng thêm test xác nhận hai lần chỉ ghi danh một lần, và test chứng minh `CHECK` constraint chặn được cả khi code sai.
 - Cắt tài liệu, tính chi phí, và xử lý rate limit.
 
@@ -307,6 +346,7 @@ Hai test đồng thời trên đều được kiểm chứng bằng cách **bỏ
 - Dữ liệu sinh viên là dữ liệu mô phỏng, không kết nối hệ thống quản lý đào tạo thật.
 - Tìm kiếm vector là quét toàn bộ, phù hợp với vài chục đến vài trăm đoạn; ở quy mô lớn cần chuyển sang pgvector hoặc Milvus.
 - Bộ đếm khóa đăng nhập nằm trong bộ nhớ của tiến trình. Chạy nhiều bản sao sau load balancer thì mỗi bản giữ một bộ đếm riêng, nên kẻ tấn công rải đều các lần đoán qua các bản sao sẽ được nhiều lượt thử hơn. Ở quy mô này thì đây là đánh đổi đúng so với việc kéo thêm Redis vào, nhưng nếu chạy nhiều hơn một instance thì đây là thứ đầu tiên phải đưa ra ngoài.
-- Chưa có refresh token và chưa có danh sách thu hồi token. Access token sống 60 phút và không rút ngắn lại được trước hạn. Claim `jti` đã được ghi sẵn để một danh sách thu hồi có thể lấy làm khóa.
+- Access token không nằm trong danh sách thu hồi, và đó là **lựa chọn chứ không phải thiếu sót**: nó là JWT không lưu ở đâu, nên phục vụ một request không tốn một vòng gọi database nào. Cái giá là một phiên đã bị thu hồi vẫn dùng được **tối đa 15 phút** nữa. Muốn cửa sổ đó bằng 0 thì phải tra database ở mọi request, và khi đó JWT mất hết ý nghĩa. Rút TTL xuống là cách chỉnh cái đánh đổi này mà không phá kiến trúc.
+- Phát hiện tái sử dụng refresh token là **nghiêm ngặt, không có cửa sổ ân hạn**. Một client gửi lại lệnh refresh sau khi mất câu trả lời sẽ bị đăng xuất. Nhiều hệ thống thật cho một khoảng ân hạn vài giây, trong đó token vừa xoay vòng được trình lại thì trả về đúng token kế nhiệm cũ. Ở đây chọn nghiêm ngặt vì bị đăng xuất là phiền toái khắc phục được, còn để lọt một token bị dùng lại thì không.
 - Chưa có tool hủy đăng ký. Sinh viên bị vượt trần tín chỉ hiện phải liên hệ phòng đào tạo để bỏ bớt môn.
 - Trạng thái cảnh báo học vụ mức 2 chưa được sinh ra tự động, vì dữ liệu mô phỏng không có lịch sử điểm theo từng học kỳ liên tiếp.

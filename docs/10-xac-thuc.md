@@ -114,6 +114,98 @@ Khóa theo từng mã sinh viên chứ không khóa theo IP, và điều đó **
 
 Bộ đếm nằm trong bộ nhớ của tiến trình. Nói thẳng ra: chạy hai bản sao sau load balancer thì có hai bộ đếm riêng, và kẻ tấn công rải đều các lần đoán qua cả hai sẽ được gấp đôi số lượt. Ở quy mô này thì đó là đánh đổi đúng so với việc kéo thêm Redis vào; nhưng nếu dịch vụ chạy nhiều hơn một instance, đây là thứ đầu tiên phải đưa ra ngoài.
 
+## Refresh token: hai loại token, hai đánh đổi ngược nhau
+
+**Access token** là JWT và **không được lưu ở đâu cả**. Nó chỉ được kiểm tra bằng chữ ký, nên phục vụ một request không tốn một vòng gọi database nào. Cái giá phải trả là **không rút lại được trước hạn**.
+
+Nên nó chỉ sống **15 phút**. Đây là chỗ đáng nói: thời gian sống của access token **chính là** độ trễ của việc thu hồi. Một sinh viên bị thu hồi phiên vẫn dùng được tối đa 15 phút nữa. Muốn cửa sổ đó bằng 0 thì phải tra database ở mọi request, và khi đó JWT chẳng còn ý nghĩa gì. Đó là một cái giá, và nó đáng được gọi tên ra thay vì để ngầm.
+
+**Refresh token** thì đánh đổi ngược lại. Nó sống 14 ngày, nên **bắt buộc phải thu hồi được**, mà một thứ chỉ thu hồi được khi ở đâu đó có một dòng ghi rằng nó còn hiệu lực. Nó lại chỉ được trình ra 15 phút một lần chứ không phải mỗi request, nên phép tra cứu đó không tốn gì đáng kể.
+
+**Không trạng thái ở chỗ nóng, có trạng thái ở chỗ bắt buộc phải thu hồi được.**
+
+### Nó đi trong cookie HttpOnly, không đi trong body
+
+```text
+Set-Cookie: refresh_token=...; HttpOnly; Secure; Max-Age=1209600;
+            Path=/auth/session; SameSite=strict
+```
+
+| Thuộc tính | Nó chặn cái gì |
+|---|---|
+| `HttpOnly` | JavaScript không đọc được cookie. Một lỗ hổng **XSS** - cách phổ biến nhất để token bị đánh cắp trên trình duyệt - không chạm tới được chứng chỉ sống hai tuần này |
+| `SameSite=strict` | Cookie được trình duyệt tự động đính kèm, và chính điều đó sinh ra bề mặt **CSRF**: một trang khác có thể khiến trình duyệt POST tới `/auth/session/refresh`. `strict` khiến cookie không được đính kèm vào request xuất phát từ nơi khác |
+| `Secure` | Trình duyệt không bao giờ gửi nó qua HTTP trần |
+| `Path=/auth/session` | Cookie **không** được gửi kèm `/chat`, và cũng không gửi kèm `/auth/login` |
+
+Còn **access token thì trả trong body**, chính là để frontend giữ nó trong RAM và **không bao giờ bỏ vào `localStorage`**. Thứ gì nằm trong `localStorage` thì sống sót qua một lần tải lại trang, nghe thì tiện, cho tới khi nhớ ra rằng nó cũng sống sót đủ lâu để bất kỳ đoạn script nào được chèn vào cũng kịp mang đi.
+
+Nói gọn: thứ mà script chạm tới được thì chỉ đáng giá 15 phút; thứ đáng giá hai tuần thì script không chạm tới được.
+
+Về `Path`: chọn `/auth/session` chứ không phải `/auth`, vì `/auth/login` là endpoint **duy nhất xử lý mật khẩu** và nó không hề đọc cookie đó. Gửi cookie tới đó thì không được gì mà lại có thứ để mất. **Một chứng chỉ không bao giờ được gửi đi là một chứng chỉ không thể bị lộ bởi thứ xử lý cái request nó không được gửi tới.**
+
+### Xoay vòng: token cũ chết ngay khi token mới ra đời
+
+Mỗi lần refresh sinh ra một refresh token mới và giết token cũ. Nhờ vậy một token bị sao chép trên đường truyền chỉ còn giá trị **cho tới lần refresh tiếp theo của chủ thật sự**, thay vì còn giá trị suốt hai tuần.
+
+Việc giành lấy token được làm bằng **chính câu `UPDATE` đang kiểm tra nó** - đúng cái mẹo mà phiếu đăng ký học phần đang dùng:
+
+```sql
+UPDATE refresh_tokens SET status = 'rotated'
+WHERE token_hash = %s AND status = 'active' AND expires_at > now()
+RETURNING student_id, family_id
+```
+
+Việc **kiểm tra** và việc **chiếm** là cùng một câu lệnh, nên hai lần refresh chạy đua với cùng một token không thể cùng thắng. Có test bắn 20 luồng để chứng minh.
+
+### Câu hỏi khó: một token đã tiêu rồi lại xuất hiện thì sao?
+
+Đây mới là phần đáng giá, và nó không phải là "cấp token mới".
+
+Hoặc **kẻ trộm** đang tiêu bản sao sau lưng sinh viên, hoặc **chính sinh viên** đang gửi lại một request mà câu trả lời không bao giờ tới nơi. **Không có cách nào phân biệt hai trường hợp đó từ bên trong service.**
+
+Nên service giả định trường hợp xấu hơn, và **thu hồi cả họ token** của lần đăng nhập đó:
+
+```text
+Kẻ trộm dùng lại token cũ  -> 401, cả họ bị thu hồi
+Token thật của sinh viên   -> 401, chết theo
+agent_refresh_reuse_total  -> 1
+```
+
+Token hợp lệ mà sinh viên đang cầm cũng chết. **Đó không phải là bug, đó là điểm mấu chốt.** Nếu là kẻ trộm, cả họ phải chết, không thì kẻ trộm giữ được phiên. Nếu là một lần gửi lại ngay tình, sinh viên bị đăng xuất và đăng nhập lại.
+
+**Phiền toái thì khắc phục được; một phiên đang sống trong tay người khác thì không.**
+
+### "Họ token" là gì
+
+Mọi token sinh ra từ **một lần đăng nhập** đều chung một `family_id`: token cấp lúc đăng nhập, token thay thế nó, token thay thế token đó, và cứ thế.
+
+Thu hồi cả họ chứ không chỉ token đang cầm là thứ làm cho việc đăng xuất **có ý nghĩa**. Nếu chỉ giết token được trình ra thì token cha của nó - đã bị xoay vòng, nhưng vẫn nằm trong bảng - sẽ sót lại, và một kẻ trộm đang giữ token cha đó vẫn cứ thế mà refresh tiếp.
+
+Ngược lại, thu hồi phải **dừng lại ở ranh giới của họ**: mỗi lần đăng nhập mở một họ riêng, nên đăng nhập trên điện thoại không bị đăng xuất theo máy tính.
+
+### Vì sao các dòng `rotated` được giữ lại chứ không xóa
+
+Vì chính chúng là **bằng chứng duy nhất** cho phép nhận ra một token bị dùng lại là một lần dùng lại, thay vì là một token chưa ai từng thấy. Xóa chúng đi là vứt bỏ luôn khả năng phát hiện tái sử dụng.
+
+Chúng chỉ bị xóa khi **đã hết hạn**, vì lúc đó một lần dùng lại cũng sẽ bị từ chối vì hết hạn rồi. Không có bước dọn này thì bảng phình thêm một dòng sau mỗi lần refresh, mãi mãi: một sinh viên cứ 15 phút refresh một lần trong một năm là 35 nghìn dòng không ai đọc tới.
+
+### Vì sao băm refresh token bằng SHA-256 chứ không phải scrypt
+
+Câu này nghe như mâu thuẫn với việc mật khẩu dùng scrypt, nhưng không.
+
+**Mật khẩu thì ngắn và đoán được**, nên phải làm cho mỗi lần đoán trở nên đắt đỏ. **Refresh token là 256 bit ngẫu nhiên**: không ai đoán ra được nó cả, nên một hàm băm chậm chẳng mua được gì mà còn đặt một khoảng chờ lên mỗi lần refresh.
+
+Bản băm ở đây tồn tại vì một mục đích hẹp hơn nhiều: nếu **bảng** bị đánh cắp, các dòng trong đó không thể đem trình cho service như một token. Làm cho một cái **bảng** bị cắp trở nên vô dụng, và làm cho một cái **token** bị cắp trở nên khó đoán, là hai việc khác nhau - và ở đây chỉ cần việc thứ nhất.
+
+Cũng không có salt, và đó cũng là cố ý: bản băm **chính là khóa tra cứu**, mà một bản băm có salt thì không tra cứu được.
+
+### Giới hạn đã biết, nói thẳng
+
+Phát hiện tái sử dụng ở đây là **nghiêm ngặt, không có cửa sổ ân hạn**. Một client gửi lại lệnh refresh sau khi mất câu trả lời sẽ bị đăng xuất. Nhiều hệ thống thật cho một khoảng ân hạn vài giây, trong đó token vừa xoay vòng được trình lại thì trả về đúng token kế nhiệm cũ thay vì báo động.
+
+Chọn nghiêm ngặt vì cán cân lệch hẳn về một phía: bị đăng xuất là phiền toái khắc phục được, còn để lọt một token bị dùng lại thì không.
+
 ## Endpoint vận hành dùng một khóa khác
 
 `/metrics` và `/stats` nằm sau `METRICS_TOKEN`, và **token của sinh viên không mở được chúng**. Có test riêng khẳng định đúng điều đó, vì "nằm sau một lớp xác thực nào đó" và "nằm sau đúng lớp xác thực cần thiết" là hai chuyện khác nhau.
@@ -130,7 +222,9 @@ Một khóa ký ngắn đến mức dò vét cạn ngoại tuyến được thì
 
 ## Kiểm thử
 
-28 test, không đụng tới database và không đụng tới mạng. Mật khẩu, token và bộ đếm khóa đều là hàm thuần của đầu vào, còn đồng hồ thì được truyền vào chứ không đọc tại chỗ - chính vì vậy mà kiểm tra được một token hết hạn mà không phải ngồi đợi một tiếng đồng hồ.
+**30 test không đụng tới database và không đụng tới mạng.** Mật khẩu, JWT và bộ đếm khóa đăng nhập đều là hàm thuần của đầu vào, còn đồng hồ thì được truyền vào chứ không đọc tại chỗ - chính vì vậy mà kiểm tra được một token hết hạn mà không phải ngồi đợi một tiếng đồng hồ.
+
+**Thêm 9 test cho refresh token thì buộc phải có PostgreSQL**, và đó không phải chuyện cài đặt. Thu hồi được nghĩa là phải có trạng thái ở đâu đó, mà trạng thái lại đúng là thứ một hàm thuần không thể có. Ranh giới giữa "thuần" và "phải có database" nằm đúng ở chỗ này, và nó nằm ở đó vì một lý do nói ra được.
 
 Những test đáng nói:
 
@@ -143,6 +237,11 @@ Những test đáng nói:
 | `test_empty_stored_hash_never_authenticates` | Một lần đổi lược đồ làm dở dang phải **đóng lại**, không phải mở ra |
 | `test_throttle_locks_one_student_without_locking_another` | Khóa một người không được khóa lây người khác |
 | `test_the_body_cannot_name_a_student` | `student_id` không còn là một trường của `ChatRequest`. Nếu sau này có ai thêm nó trở lại, test này đổ |
+| `test_reusing_a_spent_token_revokes_the_entire_family` | Kẻ trộm dùng lại token đã tiêu thì **cả họ chết**, kể cả token thật của sinh viên |
+| `test_each_login_starts_its_own_family` | Thu hồi phải dừng ở ranh giới của họ, không thì một tab hỏng đăng xuất hết mọi thiết bị |
+| `test_logout_revokes_the_family_not_just_the_token_in_hand` | Giết mỗi token đang cầm thì token cha vẫn sống, và kẻ trộm giữ token cha vẫn refresh tiếp được |
+| `test_two_refreshes_racing_with_one_token_cannot_both_win` | 20 luồng cùng trình một token thì đúng một luồng được phục vụ |
+| `test_the_token_itself_is_never_written_to_the_database` | Bảng bị lộ thì các dòng trong đó vẫn không đem trình ra được như một token |
 
 ## Điều rút ra
 

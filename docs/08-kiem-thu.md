@@ -13,19 +13,22 @@ Câu trả lời của model diễn đạt hơi khác đi thì không sao. Một
 Nên nỗ lực kiểm thử dồn vào đúng những chỗ đó.
 
 ```
-74 test, chạy trong khoảng 4 giây
+85 test, chạy trong khoảng 6 giây
 ```
 
 | Nhóm | Số test | Cần database? |
 |---|---|---|
 | Guardrail | 26 | Không |
-| Xác thực (mật khẩu, JWT, khóa đăng nhập, token vận hành) | 28 | Không |
+| Xác thực (mật khẩu, JWT, khóa đăng nhập, token vận hành) | 30 | Không |
+| Refresh token (xoay vòng, thu hồi, tái sử dụng) | 9 | **Có** |
 | Retry và rate limit | 6 | Không |
 | Đo chi phí và metrics | 6 | Không |
 | Tranh chấp đồng thời | 4 | **Có** |
 | Cắt tài liệu | 4 | Không |
 
-Chỉ 4 trên 74 test cần tới database. Đó không phải may mắn: cả guardrail lẫn tầng xác thực đều là hàm thuần, và đồng hồ được truyền vào chứ không đọc tại chỗ.
+72 trên 85 test không cần database. Đó không phải may mắn: guardrail, băm mật khẩu, JWT và bộ đếm khóa đăng nhập đều là hàm thuần, và đồng hồ được truyền vào chứ không đọc tại chỗ.
+
+Còn 13 test kia thì **buộc phải** có PostgreSQL, và đó cũng không phải chuyện cài đặt. Thu hồi được nghĩa là phải có trạng thái ở đâu đó, mà trạng thái lại đúng là thứ một hàm thuần không thể có. Ranh giới giữa "thuần" và "phải có database" nằm đúng ở chỗ này, và nó nằm ở đó vì một lý do nói ra được.
 
 ```bash
 pytest tests -q                          # toàn bộ

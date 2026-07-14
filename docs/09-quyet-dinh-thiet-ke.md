@@ -24,6 +24,13 @@ Trang này gom lại các đánh đổi đã chọn, lý do chọn, và điều 
 | Chạy lại cả sáu luật trong transaction | Chỉ đếm lại sĩ số | Một ràng buộc database chỉ bảo vệ được thứ nó diễn tả được, mà không có ràng buộc nào diễn tả được trùng lịch | Không bao giờ |
 | Độ trễ giữ 10.000 mẫu gần nhất | List không giới hạn | List không giới hạn là một cách chậm rãi để hết bộ nhớ. Cửa sổ trượt còn trả lời đúng câu hỏi hơn: "nó đang chạy ra sao" | Không bao giờ |
 | Token riêng cho /metrics và /stats | Dùng token sinh viên, hoặc để mở | Sinh viên đăng nhập được thì không vì thế mà được đọc hóa đơn và biết khi nào guardrail ra tay | Không bao giờ |
+| Access token stateless, sống 15 phút | Tra danh sách thu hồi ở mọi request | Thời gian sống ngắn CHÍNH LÀ độ trễ thu hồi. Tra database ở mọi request thì JWT mất hết ý nghĩa | Nếu 15 phút là quá lâu với nghiệp vụ, thì rút TTL chứ không thêm blacklist |
+| Refresh token có trạng thái trong database | JWT refresh token stateless | Sống 14 ngày thì bắt buộc phải thu hồi được, mà thu hồi được nghĩa là phải có trạng thái. Nó chỉ được trình ra 15 phút một lần nên tra cứu không tốn gì | Không bao giờ |
+| Refresh token trong cookie HttpOnly | Trả trong body cho frontend tự giữ | Trả trong body là trao nó cho JavaScript, và lỗ hổng XSS đầu tiên sẽ mang đi một chứng chỉ sống hai tuần | Không bao giờ |
+| Cookie giới hạn `Path=/auth/session` | `Path=/`, hoặc `Path=/auth` | Ngay cả /auth/login cũng không cần cookie này. Chứng chỉ không được gửi đi thì không thể bị lộ | Không bao giờ |
+| Phát hiện tái sử dụng thì thu hồi cả họ | Chỉ từ chối token bị dùng lại | Không phân biệt được kẻ trộm với client retry, nên giả định trường hợp xấu hơn. Đăng xuất là phiền toái khắc phục được | Không bao giờ |
+| Nghiêm ngặt, không có cửa sổ ân hạn | Cho vài giây ân hạn khi retry | Cán cân lệch hẳn: để lọt một token bị dùng lại thì không khắc phục được | Nếu người dùng thật bị đăng xuất oan quá nhiều |
+| SHA-256 cho refresh token | scrypt như mật khẩu | 256 bit ngẫu nhiên thì không ai đoán được. Băm ở đây chỉ để một cái BẢNG bị cắp trở nên vô dụng | Không bao giờ |
 | Chặn thời gian chờ ở 8 giây | Chờ trọn 51 giây theo Gemini | Sinh viên không đợi 51 giây, họ sẽ F5 và tạo thêm tải | Nếu chuyển sang xử lý bất đồng bộ |
 | Trả 429 khi hết quota | Trả 500 | Bị nhà cung cấp chặn không phải lỗi nội bộ | Không bao giờ |
 
@@ -61,7 +68,9 @@ Nói thẳng, không giấu.
 
 **Bộ đếm khóa đăng nhập nằm trong tiến trình.** Sai mật khẩu quá 5 lần thì tài khoản bị khóa 15 phút, nhưng bộ đếm đó nằm trong bộ nhớ của một tiến trình. Chạy hai bản sao sau load balancer thì có hai bộ đếm riêng, và kẻ tấn công rải đều các lần đoán qua cả hai sẽ được gấp đôi số lượt. Ở quy mô này, đó là đánh đổi đúng so với việc kéo thêm Redis vào; nhưng nếu dịch vụ chạy nhiều hơn một instance thì đây là thứ đầu tiên phải đưa ra ngoài. Xem [trang 10](10-xac-thuc.md).
 
-**Chưa có refresh token, chưa có thu hồi token.** Access token sống 60 phút, và trong 60 phút đó không có cách nào rút nó lại trước hạn. Claim `jti` đã được ghi sẵn trong mỗi token để một danh sách thu hồi sau này có thể lấy làm khóa, nhưng danh sách đó chưa tồn tại.
+**Access token vẫn không rút lại được trước hạn, và đó là lựa chọn chứ không phải thiếu sót.** Nó là JWT không lưu ở đâu, nên phục vụ một request không tốn một vòng gọi database nào. Cái giá là một phiên đã bị thu hồi vẫn dùng được **tối đa 15 phút** nữa. Muốn cửa sổ đó bằng 0 thì phải tra database ở mọi request, và khi đó JWT chẳng còn ý nghĩa gì. Cách chỉnh cái đánh đổi này là **rút TTL xuống**, không phải thêm blacklist cho access token. Refresh token thì thu hồi được, vì nó sống lâu nên bắt buộc phải thế. Xem [trang 10](10-xac-thuc.md).
+
+**Phát hiện tái sử dụng refresh token là nghiêm ngặt, không có cửa sổ ân hạn.** Một client gửi lại lệnh refresh sau khi mất câu trả lời sẽ bị đăng xuất. Nhiều hệ thống thật cho một khoảng ân hạn vài giây, trong đó token vừa xoay vòng được trình lại thì trả về đúng token kế nhiệm cũ thay vì báo động. Ở đây chọn nghiêm ngặt vì cán cân lệch hẳn về một phía, nhưng nếu người dùng thật bị đăng xuất oan quá nhiều thì đây là chỗ phải chỉnh.
 
 **Chưa có tool hủy đăng ký.** Sinh viên bị vượt trần tín chỉ hiện phải liên hệ phòng đào tạo. Đây là tool tiếp theo đáng làm, và nó cũng cần transaction (trả chỗ về cho lớp, giảm `enrolled`).
 
