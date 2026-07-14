@@ -18,11 +18,22 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from app.auth.passwords import hash_password
 from app.config import load_settings
 from app.db import close_pool, get_connection
 from app.grading import compute_gpa, earned_credits, is_passed
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "app" / "schema.sql"
+
+# The password the three simulated students share, so the demo and the README have something to
+# log in with. A real university issues each student their own and never prints it anywhere; this
+# is seed data for a simulation, and the only reason it can be written down here is that these
+# three students do not exist.
+# Mat khau dung chung cua ba sinh vien mo phong, de ban demo va README co cai ma dang nhap. Mot
+# truong dai hoc that thi cap cho moi sinh vien mot mat khau rieng va khong bao gio in no ra o
+# dau ca; day la du lieu mo phong, va ly do duy nhat viet duoc no ra day la ba sinh vien nay
+# khong co that.
+DEMO_PASSWORD = "Sinhvien@2026"
 
 # (course_code, course_name, credits, department, is_required)
 COURSES = [
@@ -248,15 +259,23 @@ def main() -> None:
             conn.execute(
                 """
                 INSERT INTO students (
-                    student_id, full_name, major, cohort, gpa, credits_earned, academic_status
+                    student_id, full_name, major, cohort, password_hash,
+                    gpa, credits_earned, academic_status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     student_id,
                     full_name,
                     major,
                     cohort,
+                    # Hashed once per student rather than hashed once and reused, so that three
+                    # students with the same password still end up with three different hashes.
+                    # That is what the salt is for, and seeding is no reason to skip it.
+                    # Bam rieng cho tung sinh vien thay vi bam mot lan roi dung lai, de ba sinh
+                    # vien cung mat khau van cho ra ba ban bam khac nhau. Salt sinh ra la de lam
+                    # viec do, va viec nap du lieu mau khong phai ly do de bo qua no.
+                    hash_password(DEMO_PASSWORD),
                     gpa,
                     earned_credits(entries),
                     academic_status(gpa),
@@ -325,6 +344,7 @@ def main() -> None:
             f"  {row['student_id']}  {row['full_name']:<18}"
             f"GPA {row['gpa']}  {row['credits_earned']:>3} tin chi  {row['academic_status']}"
         )
+    print(f"\nMat khau dang nhap cua ca ba sinh vien mo phong: {DEMO_PASSWORD}")
     close_pool()
 
 

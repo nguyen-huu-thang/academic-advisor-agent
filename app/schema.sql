@@ -32,16 +32,27 @@ CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
 -- taken from anything the model says.
 -- academic_status la thu quyet dinh tran tin chi. Sinh vien bi canh bao hoc vu chi duoc
 -- dang ky it tin chi hon, va tran do duoc doc tu day chu khong lay theo loi model noi.
+-- password_hash holds a salted scrypt digest, never the password itself. The empty default
+-- exists only so this column can be added to a database that predates it; an empty string
+-- parses as no valid hash at all, so a student whose row still carries it can never log in.
+-- That is the right way for a half-finished migration to fail: closed, not open.
+-- password_hash luu mot ban bam scrypt co salt, khong bao gio luu mat khau. Gia tri mac dinh
+-- rong chi ton tai de cot nay them duoc vao mot database co truoc no; mot chuoi rong thi khong
+-- doc ra duoc ban bam hop le nao, nen sinh vien nao con mang gia tri do se khong the dang nhap.
+-- Do la cach dung de mot lan doi luoc do lam do dang bi that bai: dong lai, chu khong mo ra.
 CREATE TABLE IF NOT EXISTS students (
     student_id       TEXT PRIMARY KEY,
     full_name        TEXT NOT NULL,
     major            TEXT NOT NULL,
     cohort           TEXT NOT NULL,
+    password_hash    TEXT NOT NULL DEFAULT '',
     gpa              NUMERIC(3, 2) NOT NULL DEFAULT 0 CHECK (gpa >= 0 AND gpa <= 4),
     credits_earned   INTEGER NOT NULL DEFAULT 0 CHECK (credits_earned >= 0),
     academic_status  TEXT NOT NULL DEFAULT 'binh_thuong'
                      CHECK (academic_status IN ('binh_thuong', 'canh_bao_1', 'canh_bao_2'))
 );
+
+ALTER TABLE students ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS courses (
     course_code  TEXT PRIMARY KEY,
