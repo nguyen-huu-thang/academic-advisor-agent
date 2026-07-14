@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_current_student, require_ops_token
 from app.auth.passwords import hash_password, verify_password
+from app.auth.refresh import hash_token as hash_refresh_token
 from app.auth.throttle import LoginThrottle
 from app.auth.tokens import InvalidToken, decode_access_token, issue_access_token
 from app.config import Settings
@@ -47,6 +48,8 @@ def make_settings(**overrides) -> Settings:
         "jwt_issuer": "academic-advisor",
         "jwt_audience": "academic-advisor-api",
         "access_token_ttl_minutes": 60,
+        "refresh_token_ttl_days": 14,
+        "cookie_secure": True,
         "login_max_attempts": 5,
         "login_lockout_minutes": 15,
         "metrics_token": OPS_TOKEN,
@@ -90,6 +93,34 @@ def test_empty_stored_hash_never_authenticates():
 def test_malformed_stored_hash_is_refused_not_crashed():
     assert not verify_password("x", "scrypt$khong$phai$so$zz$zz")
     assert not verify_password("x", "md5$deadbeef")
+
+
+# Bam refresh token
+# Hashing the refresh token
+
+
+def test_refresh_token_hash_is_deterministic_so_it_can_be_looked_up():
+    """No salt, deliberately: the hash IS the lookup key, and a salted hash cannot be looked up.
+
+    Co y khong salt: ban bam CHINH LA khoa tra cuu, ma mot ban bam co salt thi khong tra cuu duoc.
+
+    That is safe here for a reason that does not hold for passwords. A password is short and
+    guessable, so it needs a salt and a slow hash. A refresh token is 256 random bits: nobody is
+    guessing it, so the hash exists only to make a stolen table useless - not to make a stolen
+    token hard to find.
+    O day dieu do an toan vi mot ly do khong dung voi mat khau. Mat khau thi ngan va doan duoc, nen
+    no can salt va can mot ham bam cham. Refresh token la 256 bit ngau nhien: khong ai doan no ca,
+    nen ban bam chi ton tai de mot cai bang bi danh cap tro nen vo dung - chu khong phai de mot cai
+    token bi danh cap tro nen kho tim.
+    """
+    assert hash_refresh_token("abc") == hash_refresh_token("abc")
+    assert hash_refresh_token("abc") != hash_refresh_token("abd")
+
+
+def test_refresh_token_hash_does_not_contain_the_token():
+    raw = "mot-refresh-token-bi-mat"
+
+    assert raw not in hash_refresh_token(raw)
 
 
 # Token

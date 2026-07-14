@@ -132,6 +132,13 @@ def log_in(http: httpx.Client, student_id: str) -> str:
     """Exchange a password for an access token, the way a student's browser would.
 
     Doi mat khau lay access token, dung nhu trinh duyet cua sinh vien van lam.
+
+    Only the access token comes back in the body. The refresh token arrives as an HttpOnly cookie
+    and is handled by the client's cookie jar, exactly as a browser would handle it - which is the
+    point: this script never sees it, and neither would any JavaScript on the page.
+    Chi co access token quay ve trong body. Refresh token den duoi dang mot cookie HttpOnly va duoc
+    cookie jar cua client xu ly, dung nhu mot trinh duyet van lam - va do chinh la y do: script nay
+    khong he nhin thay no, va mot doan JavaScript tren trang cung se khong nhin thay.
     """
     response = http.post(
         f"{BASE_URL}/auth/login",
@@ -139,6 +146,73 @@ def log_in(http: httpx.Client, student_id: str) -> str:
     )
     response.raise_for_status()
     return response.json()["access_token"]
+
+
+def check_refresh_rotation(http: httpx.Client) -> None:
+    """Show a refresh token being rotated, then show a replay of the old one killing the session.
+
+    Cho thay mot refresh token duoc xoay vong, roi cho thay viec dung lai token cu giet ca phien.
+
+    None of this costs a model call: it all fails or succeeds before the agent is ever reached.
+    Khong buoc nao o day ton mot lan goi model: tat ca deu thanh cong hoac that bai truoc khi cham
+    toi agent.
+    """
+    print("=" * 78)
+    print("REFRESH TOKEN: xoay vong, va phat hien tai su dung")
+    print("=" * 78)
+
+    # A separate client, so this session's cookie jar is its own.
+    # Mot client rieng, de cookie jar cua phien nay la cua rieng no.
+    with httpx.Client(timeout=30.0) as browser:
+        login = browser.post(
+            f"{BASE_URL}/auth/login",
+            json={"student_id": CUONG, "password": DEMO_PASSWORD},
+        )
+        login.raise_for_status()
+
+        cookie = login.headers.get("set-cookie", "")
+        print(f"\n  Set-Cookie: {cookie}")
+        print(f"  Body tra ve: {sorted(login.json().keys())}")
+        print(
+            "\n  Refresh token KHONG nam trong body, no nam trong cookie HttpOnly nen JavaScript\n"
+            "  khong doc duoc. Access token thi nam trong body de frontend giu trong RAM,\n"
+            "  khong bao gio bo vao localStorage."
+        )
+
+        # The token a thief would have copied off the wire before the student refreshed.
+        # Token ma mot ke trom se sao chep tren duong truyen truoc khi sinh vien kip refresh.
+        stolen = browser.cookies.get("refresh_token")
+
+        rotated = browser.post(f"{BASE_URL}/auth/session/refresh")
+        rotated.raise_for_status()
+        current = browser.cookies.get("refresh_token")
+
+        print(f"\n  Sau khi refresh, token da doi: {stolen != current}")
+
+        # Now the thief spends their copy. It was already spent by the student a moment ago.
+        # Gio ke trom tieu ban sao cua ho. No vua bi sinh vien tieu mat mot luc truoc.
+        replay = httpx.post(
+            f"{BASE_URL}/auth/session/refresh",
+            cookies={"refresh_token": stolen},
+            timeout=30.0,
+        )
+        print(f"\n  Ke trom dung lai token cu   -> HTTP {replay.status_code}")
+        print(f"     {replay.json()['detail']}")
+
+        # And the student's own, perfectly legitimate token is dead as well. That is not a bug.
+        # The service cannot tell which of the two holders is the thief, so it refuses to keep
+        # serving either. Being logged out is recoverable; a live session in a thief's hands is not.
+        # Va token hoan toan chinh dang cua chinh sinh vien cung chet theo. Do khong phai loi. Dich
+        # vu khong the biet ai trong hai nguoi dang cam token la ke trom, nen no tu choi phuc vu tiep
+        # ca hai. Bi dang xuat thi khac phuc duoc; mot phien dang song trong tay ke trom thi khong.
+        after = browser.post(f"{BASE_URL}/auth/session/refresh")
+        print(f"\n  Token that cua sinh vien    -> HTTP {after.status_code}")
+        print(f"     {after.json()['detail']}")
+        print(
+            "\n  Ca ho token bi thu hoi, ke ca token that. Dich vu khong biet ai trong hai nguoi\n"
+            "  la ke trom, nen no khong phuc vu tiep ai ca. Sinh vien phai dang nhap lai - phien\n"
+            "  toai thi khac phuc duoc, con mot phien dang song trong tay ke trom thi khong.\n"
+        )
 
 
 def check_authentication(http: httpx.Client, tokens: dict[str, str]) -> None:
@@ -298,6 +372,7 @@ def main() -> None:
         print(f"Da dang nhap {len(tokens)} sinh vien, moi nguoi mot access token.\n")
 
         check_authentication(http, tokens)
+        check_refresh_rotation(http)
 
         first = True
         for session_id, student_id, label, messages in SCENARIOS:
