@@ -68,7 +68,25 @@ class Settings:
     jwt_secret: str
     jwt_issuer: str
     jwt_audience: str
+    # The access token is not stored anywhere, so it cannot be taken back before it expires.
+    # Its lifetime IS the revocation delay: a student whose session is revoked keeps working for
+    # at most this long. Fifteen minutes is the price paid for not touching the database on every
+    # single request, and it is a price worth naming out loud rather than leaving implicit.
+    # Access token khong duoc luu o dau, nen khong the rut lai truoc han. Thoi gian song cua no
+    # CHINH LA do tre cua viec thu hoi: mot sinh vien bi thu hoi phien van dung duoc nhieu nhat
+    # bang khoang thoi gian nay. Muoi lam phut la cai gia phai tra cho viec khong cham vao database
+    # o moi request, va do la cai gia dang duoc goi ten ra thay vi de ngam.
     access_token_ttl_minutes: int
+    refresh_token_ttl_days: int
+    # Whether the refresh cookie carries the Secure flag, which stops the browser from ever
+    # sending it over plain HTTP. True everywhere that matters; the only reason it can be turned
+    # off is that a local dev server speaks http, and a Secure cookie would simply never be sent.
+    # Default is on: a footgun should have to be picked up deliberately.
+    # Cookie refresh co mang co Secure hay khong, von la thu ngan trinh duyet gui no qua HTTP tran.
+    # Bat o moi noi dang ke; ly do duy nhat de tat no la may chu dev cuc bo chay http, va mot cookie
+    # Secure thi se khong bao gio duoc gui di. Mac dinh la bat: mot khau sung tu ban chan minh thi
+    # phai co y nhat len moi cam duoc.
+    cookie_secure: bool
     login_max_attempts: int
     login_lockout_minutes: int
     # A separate secret for the operational endpoints, deliberately not the student's token.
@@ -114,7 +132,9 @@ def load_settings() -> Settings:
         jwt_secret=_require_secret("JWT_SECRET"),
         jwt_issuer=os.getenv("JWT_ISSUER", "academic-advisor"),
         jwt_audience=os.getenv("JWT_AUDIENCE", "academic-advisor-api"),
-        access_token_ttl_minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "60")),
+        access_token_ttl_minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "15")),
+        refresh_token_ttl_days=int(os.getenv("REFRESH_TOKEN_TTL_DAYS", "14")),
+        cookie_secure=os.getenv("COOKIE_SECURE", "true").strip().lower() != "false",
         login_max_attempts=int(os.getenv("LOGIN_MAX_ATTEMPTS", "5")),
         login_lockout_minutes=int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15")),
         metrics_token=_require_secret("METRICS_TOKEN"),

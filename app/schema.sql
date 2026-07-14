@@ -203,6 +203,79 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
 
 CREATE INDEX IF NOT EXISTS idx_pending_session ON pending_registrations(session_id, student_id);
 
+-- Refresh tokens, stored so they can be taken away again.
+--
+-- The access token is a JWT and is deliberately not stored anywhere: it is checked by its
+-- signature alone, so serving a request costs no database round trip. The price of that is that
+-- it cannot be withdrawn before it expires, which is why it only lives an hour.
+--
+-- The refresh token is the opposite trade, and on purpose. It lives for weeks, so it MUST be
+-- withdrawable, and a thing can only be withdrawn if somewhere there is a row saying it is still
+-- valid. It is presented rarely - once an hour, not once a request - so the lookup costs nothing
+-- that matters.
+--
+-- Stateless where it is hot, stateful where it must be revocable.
+--
+-- Refresh token, duoc luu lai de co the thu hoi.
+--
+-- Access token la mot JWT va co y khong duoc luu o dau ca: no chi duoc kiem tra bang chu ky, nen
+-- phuc vu mot request khong ton mot vong goi database nao. Cai gia phai tra la khong the rut no
+-- lai truoc han, va do la ly do no chi song mot tieng.
+--
+-- Refresh token thi danh doi nguoc lai, va do la co y. No song hang tuan, nen BAT BUOC phai rut
+-- lai duoc, ma mot thu chi rut lai duoc khi o dau do co mot dong ghi rang no van con hieu luc. No
+-- lai duoc trinh ra rat thua thot - moi tieng mot lan, khong phai moi request mot lan - nen phep
+-- tra cuu nay khong ton gi dang ke.
+--
+-- Khong trang thai o cho nong, co trang thai o cho bat buoc phai thu hoi duoc.
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    -- The token itself is never stored, only its SHA-256. If this table leaked, the rows in it
+    -- still could not be presented to the service as tokens.
+    --
+    -- No salt, and no scrypt, and that is not an oversight. A password is short and guessable, so
+    -- it must be made expensive to guess. A refresh token is 256 random bits: it cannot be
+    -- guessed at all, so a slow hash would buy nothing and cost a delay on every refresh. The
+    -- hash here exists to make a stolen *table* useless, not to make a stolen *token* hard to
+    -- find - those are different jobs.
+    --
+    -- Ban than token khong bao gio duoc luu, chi luu SHA-256 cua no. Neu bang nay bi lo, cac dong
+    -- trong do van khong the dem trinh cho dich vu nhu mot token.
+    --
+    -- Khong salt, khong scrypt, va do khong phai la so suat. Mat khau thi ngan va doan duoc, nen
+    -- phai lam cho viec doan tro nen dat do. Refresh token thi la 256 bit ngau nhien: khong doan
+    -- duoc, nen mot ham bam cham chang mua duoc gi ma con lam moi lan refresh phai cho them. Ban
+    -- bam o day ton tai de mot cai BANG bi danh cap tro nen vo dung, chu khong phai de mot cai
+    -- TOKEN bi danh cap tro nen kho tim - do la hai viec khac nhau.
+    token_hash  TEXT PRIMARY KEY,
+
+    -- Every token minted from one login shares a family id: the token handed out at login, the
+    -- one that replaced it, the one that replaced that, and so on. The family is what gets
+    -- revoked when a used token turns up again, because at that point one of the two holders is
+    -- a thief and there is no way to tell which.
+    -- Moi token sinh ra tu mot lan dang nhap deu chung mot ma "ho": token cap luc dang nhap, token
+    -- thay the no, token thay the token do, va cu the. Chinh ca ho nay se bi thu hoi khi mot token
+    -- da dung lai xuat hien lan nua, boi luc do mot trong hai nguoi dang cam token la ke trom, va
+    -- khong co cach nao biet la ai.
+    family_id   TEXT NOT NULL,
+
+    student_id  TEXT NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+
+    -- 'rotated' rows are kept, not deleted, until they expire. They have to be: a rotated row is
+    -- the only evidence that lets a replayed token be recognised as a replay instead of as a
+    -- token nobody has ever seen.
+    -- Cac dong 'rotated' duoc GIU LAI, khong xoa, cho toi khi het han. Bat buoc phai vay: mot dong
+    -- rotated chinh la bang chung duy nhat cho phep nhan ra mot token bi dung lai la mot lan dung
+    -- lai, thay vi la mot token chua ai tung thay.
+    status      TEXT NOT NULL DEFAULT 'active'
+                CHECK (status IN ('active', 'rotated', 'revoked')),
+
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_family ON refresh_tokens(family_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_student ON refresh_tokens(student_id, expires_at);
+
 -- Audit trail of every tool call the agent makes. The school must be able to answer
 -- "what did the agent actually do", so this is written before the result is returned.
 -- Nhat ky moi lan agent goi tool. Nha truong phai tra loi duoc "agent da lam gi",

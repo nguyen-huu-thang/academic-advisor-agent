@@ -212,6 +212,7 @@ def main() -> None:
         # Thu tu quan trong: xoa bang con truoc bang cha, neu khong khoa ngoai se chan lai.
         conn.execute("DELETE FROM tool_audit_log")
         conn.execute("DELETE FROM messages")
+        conn.execute("DELETE FROM refresh_tokens")
         conn.execute("DELETE FROM pending_registrations")
         conn.execute("DELETE FROM enrollments")
         conn.execute("DELETE FROM grades")
