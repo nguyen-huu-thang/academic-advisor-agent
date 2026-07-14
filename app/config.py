@@ -22,11 +22,30 @@ PRICE_PER_1M_TOKENS: dict[str, dict[str, float]] = {
 }
 
 
+# A signing key short enough to brute-force offline is the same as no signing key: whoever
+# recovers it can mint a token for any student. There is no safe default here, so the service
+# refuses to start rather than fall back to one.
+# Mot khoa ky ngan den muc co the do vet can ngoai tuyen thi cung nhu khong co khoa ky: ai lay
+# lai duoc no la cap duoc token cho bat ky sinh vien nao. O day khong co gia tri mac dinh nao la
+# an toan, nen dich vu tu choi khoi dong chu khong lay dai mot gia tri.
+MIN_JWT_SECRET_LENGTH = 32
+
+
 def _require(name: str) -> str:
     value = os.getenv(name)
     if not value:
         raise RuntimeError(
             f"Thieu bien moi truong {name}. Hay sao chep .env.example thanh .env va dien gia tri."
+        )
+    return value
+
+
+def _require_secret(name: str) -> str:
+    value = _require(name)
+    if len(value) < MIN_JWT_SECRET_LENGTH:
+        raise RuntimeError(
+            f"Bien moi truong {name} phai dai it nhat {MIN_JWT_SECRET_LENGTH} ky tu. "
+            'Sinh mot khoa moi: python -c "import secrets; print(secrets.token_urlsafe(48))"'
         )
     return value
 
@@ -41,6 +60,17 @@ class Settings:
     max_tool_iterations: int
     retrieval_top_k: int
     current_semester: str
+    # Authentication. The service both issues and verifies its own access tokens, so it needs
+    # the signing key, the two claims that say a token was meant for this service, and how long
+    # a token stays good for.
+    # Xac thuc. Dich vu vua tu cap vua tu xac minh access token cua chinh no, nen no can khoa ky,
+    # hai claim noi len rang token duoc cap cho dung dich vu nay, va thoi han token con hieu luc.
+    jwt_secret: str
+    jwt_issuer: str
+    jwt_audience: str
+    access_token_ttl_minutes: int
+    login_max_attempts: int
+    login_lockout_minutes: int
     # The credit ceiling depends on how the student is doing, not on who is asking. A student
     # on academic warning is held to a lower ceiling so they can concentrate on fewer courses.
     # Tran tin chi phu thuoc vao ket qua hoc tap cua sinh vien, khong phu thuoc vao viec ai
@@ -72,6 +102,12 @@ def load_settings() -> Settings:
         max_tool_iterations=int(os.getenv("MAX_TOOL_ITERATIONS", "5")),
         retrieval_top_k=int(os.getenv("RETRIEVAL_TOP_K", "4")),
         current_semester=os.getenv("CURRENT_SEMESTER", "2026.1"),
+        jwt_secret=_require_secret("JWT_SECRET"),
+        jwt_issuer=os.getenv("JWT_ISSUER", "academic-advisor"),
+        jwt_audience=os.getenv("JWT_AUDIENCE", "academic-advisor-api"),
+        access_token_ttl_minutes=int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "60")),
+        login_max_attempts=int(os.getenv("LOGIN_MAX_ATTEMPTS", "5")),
+        login_lockout_minutes=int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15")),
         max_credits_by_status={
             "binh_thuong": int(os.getenv("MAX_CREDITS_BINH_THUONG", "24")),
             "canh_bao_1": int(os.getenv("MAX_CREDITS_CANH_BAO_1", "18")),
