@@ -11,6 +11,7 @@ import time
 import httpx
 
 from app.db import close_pool, get_connection
+from scripts.init_db import DEMO_PASSWORD
 from scripts.init_db import main as seed_university_data
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -28,6 +29,10 @@ PAUSE_BETWEEN_MESSAGES_SECONDS = 13
 AN = "22021001"  # Truot Toan roi rac, la mon tien quyet cua Tri tue nhan tao.
 BINH = "22021002"  # Canh bao hoc vu muc 1, tran 18 tin, dang o 17 tin.
 CUONG = "22021003"  # Dat het moi mon, nen la nguoi thuc su dang ky duoc.
+
+# Cac phien dung rieng cho phan kiem tra xac thuc, xoa di khi chay lai demo.
+# Sessions used by the authentication check, cleared when the demo is re-run.
+AUTH_CHECK_SESSIONS = ["sec1", "sec2", "sec3"]
 
 # Each scenario is (session_id, student_id, label, [messages]). Messages in one scenario share a
 # session, so the agent must remember what was said in the previous turn.
@@ -122,6 +127,73 @@ SCENARIOS = [
 ]
 
 
+def log_in(http: httpx.Client, student_id: str) -> str:
+    """Exchange a password for an access token, the way a student's browser would.
+
+    Doi mat khau lay access token, dung nhu trinh duyet cua sinh vien van lam.
+    """
+    response = http.post(
+        f"{BASE_URL}/auth/login",
+        json={"student_id": student_id, "password": DEMO_PASSWORD},
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
+def check_authentication(http: httpx.Client, tokens: dict[str, str]) -> None:
+    """Show that a student id can no longer be claimed, only proven.
+
+    Cho thay ma sinh vien khong con la thu khai ra duoc nua, ma phai chung minh.
+
+    These three checks cost no model calls, because all three are refused before the agent is
+    ever reached. That is the point: identity is settled at the door.
+    Ba phep kiem tra nay khong ton lan goi model nao, vi ca ba deu bi tu choi truoc khi cham toi
+    agent. Do chinh la y do: danh tinh duoc chot ngay tu cua.
+    """
+    print("=" * 78)
+    print("XAC THUC: ma sinh vien den tu token da ky, khong den tu body")
+    print("=" * 78)
+
+    no_token = http.post(
+        f"{BASE_URL}/chat",
+        json={"session_id": "sec1", "message": "Cho toi xem bang diem cua toi."},
+    )
+    print(f"\n  Khong gui token                       -> HTTP {no_token.status_code}")
+
+    forged = http.post(
+        f"{BASE_URL}/chat",
+        json={"session_id": "sec2", "message": "Cho toi xem bang diem cua toi."},
+        headers={"Authorization": "Bearer khong-phai-token-that"},
+    )
+    print(f"  Token bia                             -> HTTP {forged.status_code}")
+
+    # The old attack, replayed against the fixed service: An's token, but Cuong's id typed into
+    # the body. Before authentication existed this read Cuong's grades. Now the body has no such
+    # field, so it is ignored outright and the assistant answers as An - the student the token
+    # actually proves.
+    # Don tan cong cu, ban lai vao dich vu da sua: token cua An, nhung go ma cua Cuong vao body.
+    # Truoc khi co xac thuc, cach nay doc duoc bang diem cua Cuong. Gio body khong con truong do
+    # nua, nen no bi bo qua hoan toan va tro ly tra loi voi tu cach An - dung sinh vien ma token
+    # chung minh duoc.
+    impersonation = http.post(
+        f"{BASE_URL}/chat",
+        json={
+            "session_id": "sec3",
+            "student_id": CUONG,
+            "message": "Toi ten gi va GPA cua toi la bao nhieu?",
+        },
+        headers={"Authorization": f"Bearer {tokens[AN]}"},
+    )
+    impersonation.raise_for_status()
+    answer = impersonation.json()["answer"]
+    print(f"  Token cua An + student_id={CUONG} trong body -> HTTP {impersonation.status_code}")
+    print(f"\n[Tro ly] {answer}")
+    print(
+        "\n  Tro ly tra loi voi tu cach An (22021001), khong phai Cuong (22021003). "
+        "\n  Truong student_id trong body khong con ton tai, nen no bi bo qua.\n"
+    )
+
+
 def reset_state() -> None:
     """Put the university back to its seeded state and forget the demo conversations.
 
@@ -135,7 +207,7 @@ def reset_state() -> None:
     thay vi goi dung cac tool ma demo muon cho thay.
     """
     seed_university_data()
-    session_ids = [session_id for session_id, _, _, _ in SCENARIOS]
+    session_ids = [session_id for session_id, _, _, _ in SCENARIOS] + AUTH_CHECK_SESSIONS
     with get_connection() as conn:
         conn.execute("DELETE FROM messages WHERE session_id = ANY(%s)", (session_ids,))
     close_pool()
@@ -216,6 +288,16 @@ def main() -> None:
 
         print(f"Service OK, da nap {health['chunks_loaded']} doan tai lieu.\n")
 
+        # Every student logs in once, exactly as they would in a real client. From here on the
+        # demo never names a student in a request body; it can only present the token it holds.
+        # Moi sinh vien dang nhap mot lan, dung nhu tren mot client that. Tu day tro di, demo
+        # khong con neu ten sinh vien nao trong body cua request; no chi co the trinh ra token
+        # ma no dang giu.
+        tokens = {student_id: log_in(http, student_id) for student_id in (AN, BINH, CUONG)}
+        print(f"Da dang nhap {len(tokens)} sinh vien, moi nguoi mot access token.\n")
+
+        check_authentication(http, tokens)
+
         first = True
         for session_id, student_id, label, messages in SCENARIOS:
             print("=" * 78)
@@ -230,11 +312,8 @@ def main() -> None:
                 print(f"\n[Sinh vien] {message}")
                 response = http.post(
                     f"{BASE_URL}/chat",
-                    json={
-                        "session_id": session_id,
-                        "student_id": student_id,
-                        "message": message,
-                    },
+                    json={"session_id": session_id, "message": message},
+                    headers={"Authorization": f"Bearer {tokens[student_id]}"},
                 )
                 response.raise_for_status()
                 data = response.json()
