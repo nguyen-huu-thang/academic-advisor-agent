@@ -1,6 +1,6 @@
 # Academic Advisor Agent
 
-Trợ lý cố vấn học tập kiêm đăng ký học phần, xây dựng theo kiến trúc **RAG + tool-use agent**, chạy trên Gemini API và PostgreSQL. Dịch vụ được đóng gói dưới dạng một microservice FastAPI.
+Trợ lý cố vấn học tập kiêm đăng ký học phần, xây dựng theo kiến trúc **RAG + tool-use agent**, chạy trên Gemini API và PostgreSQL. Hệ thống là một **dịch vụ (service) FastAPI**, trạng thái nằm ở PostgreSQL chứ không nằm trong tiến trình, trừ đúng một chỗ được nêu ở mục [Giới hạn đã biết](#giới-hạn-đã-biết).
 
 Điểm trọng tâm của dự án không nằm ở việc gọi được LLM, mà ở việc **kiểm soát những gì LLM được phép làm**: mọi con số đưa ra đều phải truy được về nguồn, mọi lệnh ghi danh đều phải qua guardrail đặt trong code, và khi nhiều sinh viên cùng giành chỗ cuối của một lớp thì đúng một người được nhận.
 

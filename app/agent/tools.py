@@ -206,6 +206,15 @@ GEMINI_TOOLS = [types.Tool(function_declarations=TOOL_DECLARATIONS)]
 
 
 def load_student(student_id: str) -> dict | None:
+    """Read one student's whole record by id, or None if there is no such student.
+
+    Doc toan bo ho so tong quan cua mot sinh vien theo ma, hoac None neu khong co.
+
+    Chi SELECT dung cac cot can dung (khong SELECT *) de khong keo ve du lieu thua. Khong
+    can JOIN vi moi thong tin tong quan cua sinh vien deu nam ngay trong bang students.
+    fetchone() tra ve dong dau tien - o day toi da la mot dong vi student_id la khoa chinh -
+    hoac None neu khong khop dong nao.
+    """
     with get_connection() as conn:
         return conn.execute(
             """
@@ -243,6 +252,9 @@ def load_passed_courses(student_id: str) -> frozenset[str]:
 
 
 def _passed_courses(conn, student_id: str) -> frozenset[str]:
+    # Lay ma cac mon sinh vien da DAT (cot passed = true trong bang grades). Tra ve mot
+    # frozenset de guardrail so sanh nhanh "tap mon da dat" voi "tap mon tien quyet" bang
+    # phep tru tap hop (xem check_registration_rules trong guardrail.py).
     rows = conn.execute(
         "SELECT course_code FROM grades WHERE student_id = %s AND passed",
         (student_id,),
@@ -256,6 +268,12 @@ def load_registered(student_id: str, semester: str) -> tuple[RegisteredClass, ..
 
 
 def _registered(conn, student_id: str, semester: str) -> tuple[RegisteredClass, ...]:
+    # Danh sach cac lop sinh vien da dang ky trong hoc ky. Ghep ba bang lai voi nhau:
+    #   enrollments (e)     -> sinh vien nay da ghi danh vao nhung lop nao
+    #   class_sections (s)  -> lay lich hoc cua tung lop (thu, tiet bat dau, tiet ket thuc)
+    #   courses (c)         -> lay ten mon va so tin chi
+    # Loc theo dung sinh vien va dung hoc ky, sap xep theo thu roi theo tiet cho de doc.
+    # Guardrail dung ket qua nay de kiem tra trung lich va cong don tong tin chi da dang ky.
     rows = conn.execute(
         """
         SELECT s.id, e.course_code, c.course_name, c.credits,
@@ -298,6 +316,10 @@ def is_registration_open(semester: str) -> bool:
 
 
 def _registration_open(conn, semester: str) -> bool:
+    # Hoi thang PostgreSQL xem thoi diem "bay gio" (now()) co nam trong khoang mo dang ky cua
+    # hoc ky hay khong. Phep so sanh dat o phia database, khong phai o phia ung dung, de neu
+    # dong ho hai ben lech nhau thi cung khong the mo lai mot dot dang ky da dong.
+    # row co the la None (khong co dong nao cho hoc ky nay) -> khi do coi nhu dang ky khong mo.
     row = conn.execute(
         """
         SELECT (now() BETWEEN opens_at AND closes_at) AS is_open
@@ -309,6 +331,17 @@ def _registration_open(conn, semester: str) -> bool:
 
 
 def load_class_section(section_id: int, semester: str) -> ClassSection | None:
+    """Load one class section and everything the rules need to judge it.
+
+    Nap mot lop hoc phan kem moi thu ma cac quy tac can de phan xu no.
+
+    Doc bang HAI truy van thay vi mot:
+      1. Ghep class_sections voi courses de lay lich hoc, si so, ten mon, so tin chi.
+         Neu khong tim thay lop (sai ma hoac sai hoc ky) thi tra ve None ngay.
+      2. Lay danh sach mon tien quyet cua mon nay tu bang prerequisites.
+    Tach lam hai la de tranh JOIN nhan ban dong: mot mon co N mon tien quyet se lam truy van
+    ghep tra ve N dong trung lap thong tin lop. O day thong tin lop chi can dung mot dong.
+    """
     with get_connection() as conn:
         row = conn.execute(
             """
@@ -323,6 +356,7 @@ def load_class_section(section_id: int, semester: str) -> ClassSection | None:
         if row is None:
             return None
 
+        # Danh sach ma mon tien quyet cua mon nay, doc rieng roi gom thanh frozenset ben duoi.
         prereqs = conn.execute(
             "SELECT prereq_code FROM prerequisites WHERE course_code = %s",
             (row["course_code"],),
@@ -372,6 +406,15 @@ class ToolExecutor:
         self._semester = settings.current_semester
 
     def execute(self, tool_name: str, arguments: dict, context: TurnContext) -> dict:
+        """Route a tool name to its handler and run it. Only called after the guardrail allows it.
+
+        Dieu huong mot ten tool toi dung handler cua no roi chay. Chi duoc goi sau khi guardrail
+        da cho phep (xem loop.py:_handle_tool_call).
+
+        Dung mot bang tra cuu (dict ten tool -> ham xu ly) thay vi mot chuoi if/elif dai. Moi
+        ham xu ly deu nhan cung bo tham so (arguments, context) va tra ve mot dict se duoc nap
+        nguoc lai cho model duoi dang ket qua tool.
+        """
         handlers = {
             "tim_kiem_quy_che": self._tim_kiem_quy_che,
             "tim_lop_hoc_phan": self._tim_lop_hoc_phan,
@@ -387,6 +430,13 @@ class ToolExecutor:
         return handler(arguments, context)
 
     def _tim_kiem_quy_che(self, arguments: dict, context: TurnContext) -> dict:
+        """RAG: tim cac doan tai lieu lien quan nhat toi cau hoi, kem nguon trich dan.
+
+        Day la buoc "R" (Retrieval) cua RAG. Lay cau hoi model dua ra, goi Retriever de tim
+        top_k doan giong nhat trong kho tri thuc, roi tra ve noi dung kem tieu de va nguon.
+        Neu khong tim thay gi, tra ve ghi chu bao model phai noi thang la khong co thong tin,
+        tuyet doi khong duoc bia. Chinh phan "nguon" giup model trich dan lai cho sinh vien.
+        """
         query = str(arguments.get("cau_hoi", "")).strip()
         if not query:
             return {"loi": "Thieu cau hoi can tra cuu."}
@@ -405,10 +455,21 @@ class ToolExecutor:
         }
 
     def _tim_lop_hoc_phan(self, arguments: dict, context: TurnContext) -> dict:
+        """List open class sections for a course (or all courses), with schedule and prerequisites.
+
+        Liet ke cac lop hoc phan dang mo cua mot mon (hoac tat ca mon), kem lich hoc va mon tien
+        quyet. Model dung tool nay de lay ma_lop truoc khi goi dang_ky_hoc_phan.
+
+        Chuan hoa ma mon ve chu HOA de "int3401" va "INT3401" deu khop. Neu co ma_mon thi loc
+        theo mon do, neu bo trong thi liet ke moi lop dang mo trong hoc ky. Sau khi lay danh
+        sach lop, doc them mon tien quyet cua tat ca cac mon trong ket qua bang MOT truy van
+        (dung ANY(%s)) roi gom lai theo mon, tranh goi database lap di lap lai cho tung mon.
+        """
         course_code = str(arguments.get("ma_mon") or "").strip().upper()
 
         with get_connection() as conn:
             if course_code:
+                # Nhanh 1: chi lay cac lop cua dung mot mon. JOIN courses de kem ten mon va tin chi.
                 rows = conn.execute(
                     """
                     SELECT s.id, s.course_code, c.course_name, c.credits, s.section_no,
@@ -422,6 +483,7 @@ class ToolExecutor:
                     (self._semester, course_code),
                 ).fetchall()
             else:
+                # Nhanh 2: khong loc theo mon, lay het moi lop dang mo trong hoc ky.
                 rows = conn.execute(
                     """
                     SELECT s.id, s.course_code, c.course_name, c.credits, s.section_no,
@@ -445,6 +507,9 @@ class ToolExecutor:
                     )
                 }
 
+            # Lay mon tien quyet cho tat ca cac mon co trong ket qua chi bang mot truy van.
+            # ANY(%s) nhan mot danh sach ma mon va khop bat ky ma nao trong danh sach do, thay
+            # cho viec chay mot truy van rieng cho tung mon (tranh loi "N+1 query").
             prereq_rows = conn.execute(
                 """
                 SELECT course_code, prereq_code FROM prerequisites
@@ -453,6 +518,8 @@ class ToolExecutor:
                 ([row["course_code"] for row in rows],),
             ).fetchall()
 
+        # Gom cac dong (mon, mon_tien_quyet) thanh dict: mon -> [danh sach mon tien quyet].
+        # setdefault tao san list rong cho lan gap mon do dau tien roi moi append vao.
         prereqs: dict[str, list[str]] = {}
         for row in prereq_rows:
             prereqs.setdefault(row["course_code"], []).append(row["prereq_code"])
@@ -480,6 +547,16 @@ class ToolExecutor:
         }
 
     def _tra_cuu_bang_diem(self, arguments: dict, context: TurnContext) -> dict:
+        """Look up the student's transcript, optionally filtered to one semester.
+
+        Tra cuu bang diem cua sinh vien, co the loc theo mot hoc ky.
+
+        Chu y: ma sinh vien lay tu context.student_id (tu token da xac thuc), KHONG lay tu
+        tham so cua model - nen model khong the doc bang diem cua nguoi khac. JOIN grades voi
+        courses de moi dong diem co kem ten mon va so tin chi. Diem chu (letter_grade) va ket
+        qua dat/khong dat duoc tinh o tang Python bang chung mot module grading.py, de con so
+        tro ly doc ra luon khop voi quy che.
+        """
         semester = str(arguments.get("hoc_ky") or "").strip()
 
         with get_connection() as conn:
@@ -526,11 +603,22 @@ class ToolExecutor:
         }
 
     def _tra_cuu_tien_do_hoc_tap(self, arguments: dict, context: TurnContext) -> dict:
+        """Overview of the student's progress: GPA, credits, status, ceiling, courses still owed.
+
+        Tong quan tien do hoc tap: GPA, tin chi, tinh trang hoc vu, tran tin chi, va cac mon
+        bat buoc con thieu. Gop du lieu tu ba nguon: ho so sinh vien (load_student), tran tin
+        chi va cac lop da dang ky (co san trong context), va truy van "mon bat buoc con thieu"
+        ben duoi.
+        """
         student = load_student(context.student_id)
         if student is None:
             return {"loi": "Khong tim thay sinh vien."}
 
         with get_connection() as conn:
+            # Cac mon BAT BUOC (is_required) ma sinh vien CHUA dat.
+            # Cach doc: lay moi mon bat buoc, roi loai bo nhung mon da nam trong tap "cac mon
+            # sinh vien da dat" - chinh la truy van con NOT IN (SELECT ... WHERE passed).
+            # Ket qua la danh sach mon bat buoc con no lai, dung de nhac sinh vien can hoc them.
             missing = conn.execute(
                 """
                 SELECT c.course_code, c.course_name, c.credits
@@ -606,6 +694,10 @@ class ToolExecutor:
             ).fetchall()
             credit_rows = conn.execute("SELECT course_code, credits FROM courses").fetchall()
 
+        # credits_of: ma mon -> so tin chi, dung de tra nhanh trong so khi tinh GPA.
+        # scores: ma mon -> diem hien tai. Khoi tao tu bang diem that. O vong lap ben duoi,
+        # gan scores[code] = score se GHI DE diem cu neu mon do da co - dung la cach quy che
+        # xu ly hoc lai (lay diem lan sau, khong cong them lan truoc).
         credits_of = {row["course_code"]: row["credits"] for row in credit_rows}
         scores: dict[str, Decimal] = {row["course_code"]: row["score"] for row in current}
 
@@ -637,6 +729,8 @@ class ToolExecutor:
         if not applied:
             return {"loi": "Thieu danh sach hoc phan va diem du kien."}
 
+        # Hai tap (diem, tin chi) de dua vao compute_gpa: mot tap theo diem hien tai, mot tap
+        # theo diem sau khi da ap cac diem gia dinh (scores da bao gom cac diem ghi de o tren).
         current_entries = [(row["score"], credits_of[row["course_code"]]) for row in current]
         projected_entries = [(score, credits_of[code]) for code, score in scores.items()]
 
@@ -943,6 +1037,13 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
 
 
 def _schedule_text(day_of_week: int, start_period: int, end_period: int) -> str:
+    """Format a class schedule into readable Vietnamese, e.g. "Thu 3, tiet 1-3".
+
+    Dinh dang lich hoc thanh chuoi tieng Viet de doc, vi du "Thu 3, tiet 1-3".
+
+    Quy uoc day_of_week theo thoi khoa bieu Viet Nam: 2 = thu Hai, ..., 7 = thu Bay,
+    8 = Chu nhat (xem rang buoc CHECK trong schema.sql).
+    """
     names = {2: "Thu 2", 3: "Thu 3", 4: "Thu 4", 5: "Thu 5", 6: "Thu 6", 7: "Thu 7", 8: "Chu nhat"}
     weekday = names.get(day_of_week, f"Thu {day_of_week}")
     return f"{weekday}, tiet {start_period}-{end_period}"

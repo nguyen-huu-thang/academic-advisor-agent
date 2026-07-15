@@ -43,6 +43,8 @@ class Retriever:
         Doc toan bo doan tai lieu tu database vao bo nho. Tra ve so doan da nap.
         """
         with get_connection() as conn:
+            # Lay tat ca cac doan (chunks) kem vector embedding cua chung, JOIN sang documents
+            # de biet moi doan thuoc tai lieu nao (tieu de, nguon) - phuc vu viec trich nguon.
             rows = conn.execute(
                 """
                 SELECT c.content, c.embedding, d.title, d.source
@@ -54,6 +56,8 @@ class Retriever:
 
         self._rows = rows
         if rows:
+            # Xep chong tat ca embedding thanh mot ma tran (so_doan x so_chieu). Nho vay luc tim
+            # kiem chi can mot phep nhan ma tran la cham diem duoc voi toan bo kho cung mot luc.
             self._matrix = np.asarray([row["embedding"] for row in rows], dtype=np.float64)
         else:
             self._matrix = None
@@ -72,8 +76,16 @@ class Retriever:
         query_vector = self._client.embed([query], is_query=True)[0]
         # Both sides are L2-normalised, so the dot product is the cosine similarity.
         # Ca hai ve deu da chuan hoa L2, nen tich vo huong chinh la do tuong dong cosine.
+        # scores la mang 1 chieu: moi phan tu la diem giong nhau giua truy van va mot doan.
         scores = self._matrix @ query_vector
 
+        # Chon top_k doan diem cao nhat bang HAI buoc, tranh sap xep toan bo mang cho ton kem:
+        #   1. argpartition(-scores, top_k - 1)[:top_k]: dua top_k phan tu lon nhat len dau mang
+        #      chi tra ve CHI SO cua chung), nhung chua sap xep noi bo. Dung -scores vi argpartition
+        #      lam viec theo thu tu tang dan, dao dau de "lon nhat" thanh "nho nhat".
+        #   2. argsort(-scores[best]): sap xep dung top_k chi so do theo diem giam dan, de ket qua
+        #      tra ve dung thu tu tu giong nhat toi it giong hon.
+        # Cach nay nhanh hon np.argsort ca mang khi kho lon: chi sap xep top_k thay vi tat ca.
         top_k = min(top_k, len(self._rows))
         best = np.argpartition(-scores, top_k - 1)[:top_k]
         best = best[np.argsort(-scores[best])]

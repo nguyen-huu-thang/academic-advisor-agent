@@ -33,6 +33,20 @@ class ConversationMemory:
         self._history_turns = history_turns
 
     def load_history(self, session_id: str, student_id: str) -> list[types.Content]:
+        """Load recent conversation turns for one student's session, in chronological order.
+
+        Nap cac luot hoi thoai gan day cua mot phien cua mot sinh vien, theo dung thu tu thoi gian.
+
+        Truy van long hai tang, va thu tu sap xep hai tang la nguoc nhau - co chu dich:
+          - Tang trong: ORDER BY id DESC ... LIMIT N -> lay N dong MOI NHAT (id lon nhat truoc).
+          - Tang ngoai: ORDER BY id ASC             -> dao lai ve thu tu cu -> moi, dung thu tu
+            hoi thoai de nap cho model.
+        Neu chi co mot tang ASC + LIMIT thi se lay nham N dong DAU TIEN (cu nhat), khong phai
+        gan day nhat. Con neu de nguyen thu tu DESC thi model doc hoi thoai nguoc dong thoi gian.
+        Nhan doi (history_turns * 2) vi moi luot gom hai dong: mot cua sinh vien, mot cua model.
+        Loc theo ca session_id lan student_id (xem docstring cua class) de khong lo doc nham
+        hoi thoai cua nguoi khac.
+        """
         with get_connection() as conn:
             rows = conn.execute(
                 """
@@ -48,6 +62,7 @@ class ConversationMemory:
                 (session_id, student_id, self._history_turns * 2),
             ).fetchall()
 
+        # Chuyen moi dong thanh mot Content cua Gemini: role la "user" (sinh vien) hoac "model".
         return [
             types.Content(role=row["role"], parts=[types.Part.from_text(text=row["content"])])
             for row in rows

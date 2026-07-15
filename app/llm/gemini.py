@@ -206,6 +206,13 @@ class GeminiClient:
         )
 
     def _read_usage(self, response: types.GenerateContentResponse) -> Usage:
+        """Pull token counts out of the response and turn them into a Usage with a cost.
+
+        Rut so token tu phan metadata cua phan hoi va quy ra mot Usage kem chi phi USD.
+
+        Neu phan hoi khong kem metadata (hiem, nhung co the xay ra) thi tra ve Usage rong de
+        khong lam hong phep cong don o vong lap agent.
+        """
         metadata = response.usage_metadata
         if metadata is None:
             return Usage()
@@ -226,6 +233,14 @@ class GeminiClient:
 
     @staticmethod
     def _read_text(content: types.Content | None) -> str | None:
+        """Join the text parts of a model response into one string, or None if there is no text.
+
+        Noi cac phan text cua phan hoi thanh mot chuoi, hoac None neu khong co text nao.
+
+        Mot phan hoi cua Gemini co the gom nhieu "part": co part la text, co part la lenh goi
+        tool. Ham nay chi gom cac part text lai; khi model chi goi tool ma khong noi gi thi tra
+        ve None.
+        """
         if content is None or not content.parts:
             return None
         pieces = [part.text for part in content.parts if part.text]

@@ -193,6 +193,16 @@ def revoke_family_of(raw_token: str) -> None:
 
 
 def _mint(conn, student_id: str, family_id: str, settings: Settings) -> str:
+    """Create one new refresh token row and return the raw token to hand to the client.
+
+    Tao mot dong refresh token moi va tra ve token GOC de dua cho client.
+
+    Sinh token ngau nhien (256 bit), luu vao bang chi phan bam (hash_token) chu khong luu
+    token goc - neu bang bi lo thi cac dong trong do khong the dem trinh nhu token. Han dung
+    do PostgreSQL tinh: now() + so_ngay * interval '1 day'. family_id gan token nay vao dung
+    ho token cua lan dang nhap: token cap luc dang nhap dung uuid moi, token xoay vong dung
+    lai family_id cua token cu (xem rotate) de ca chuoi cung mot ho.
+    """
     raw_token = secrets.token_urlsafe(TOKEN_BYTES)
     conn.execute(
         """
@@ -254,6 +264,16 @@ def _reject(conn, token_hash: str) -> InvalidRefreshToken:
 
 
 def _revoke_family(conn, family_id: str) -> None:
+    """Mark every still-live token in a family as revoked, in one statement.
+
+    Danh dau moi token con song trong mot ho la da thu hoi, chi bang mot cau lenh.
+
+    Dung khi dang xuat, hoac khi phat hien tai su dung token. Cap nhat tat ca dong cung
+    family_id (tru nhung dong da revoked san de khong ghi de vo ich). Sau cau lenh nay, moi
+    token thuoc lan dang nhap do - ke ca token dang duoc cam chinh dang - deu khong dung duoc
+    nua. STATUS_REVOKED va cac hang khac duoc noi truc tiep vao chuoi SQL vi chung la hang so
+    trong code, khong phai du lieu tu nguoi dung, nen khong co rui ro SQL injection.
+    """
     conn.execute(
         f"""
         UPDATE refresh_tokens SET status = '{STATUS_REVOKED}'
