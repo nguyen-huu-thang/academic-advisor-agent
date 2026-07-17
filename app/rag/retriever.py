@@ -1,6 +1,17 @@
 """Vector search over the chunks stored in PostgreSQL.
 
 Tìm kiếm vector trên các đoạn tài liệu lưu trong PostgreSQL.
+
+Role in the RAG pipeline - SERVING stage, step 5/7: Retrieval (the "R" in RAG).
+Runs once per question: embeds the query (GeminiClient.embed, is_query=True), scores it
+against every stored chunk embedding (step 4) by cosine similarity, and returns the top_k
+closest passages. Its output is handed to the agent tool that quotes them
+(app/agent/tools.py::_tim_kiem_quy_che, step 6) so the model can answer with citations.
+Vai trò trong luồng RAG - giai đoạn SERVING (phục vụ, chạy online), bước 5/7: Truy hồi
+(chính là chữ "R" trong RAG). Chạy mỗi lần có câu hỏi: sinh embedding cho câu hỏi
+(GeminiClient.embed, is_query=True), chấm điểm với toàn bộ embedding đã lưu (bước 4) bằng
+độ tương đồng cosine, trả về top_k đoạn gần nhất. Kết quả được đưa cho tool của agent để
+trích dẫn (app/agent/tools.py::_tim_kiem_quy_che, bước 6), giúp model trả lời kèm nguồn.
 """
 
 from dataclasses import dataclass

@@ -2,7 +2,11 @@
 -- Lược đồ cơ sở dữ liệu cho trợ lý cố vấn học tập.
 
 -- Knowledge base: documents split into chunks with their embedding vectors.
+-- This is step 4 of the RAG pipeline (the vector store). scripts/ingest.py writes here
+-- after chunking + embedding; app/rag/retriever.py reads every row back at startup.
 -- Kho tri thức: tài liệu được cắt thành các đoạn kèm vector embedding.
+-- Đây là bước 4 của luồng RAG (kho vector). scripts/ingest.py ghi vào đây sau khi cắt
+-- đoạn và sinh embedding; app/rag/retriever.py đọc lại toàn bộ dòng lúc khởi động.
 CREATE TABLE IF NOT EXISTS documents (
     id          SERIAL PRIMARY KEY,
     title       TEXT NOT NULL,

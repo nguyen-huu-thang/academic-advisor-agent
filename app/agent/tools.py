@@ -9,6 +9,15 @@ Mỗi tool được khai báo với Gemini dưới dạng function schema; model
 định gọi tool nào. Phần cài đặt đọc dữ liệu từ PostgreSQL, nên mọi con số mà trợ lý đưa ra đều
 đến từ dữ liệu thật chứ không phải model tự nhớ.
 
+One of these tools, `tim_kiem_quy_che`, is the RAG entry point (steps 5-6 of the pipeline):
+it calls the Retriever to fetch the passages most relevant to the question, then returns them
+(with their source) as the tool result, which the model quotes in its answer. The other tools
+query structured student data instead. See _tim_kiem_quy_che below.
+Một trong các tool này, `tim_kiem_quy_che`, chính là cửa vào RAG (bước 5-6 của luồng): nó gọi
+Retriever để lấy các đoạn liên quan nhất tới câu hỏi, rồi trả về (kèm nguồn) dưới dạng kết quả
+tool để model trích dẫn trong câu trả lời. Các tool còn lại thì truy vấn dữ liệu sinh viên có
+cấu trúc. Xem _tim_kiem_quy_che bên dưới.
+
 Registering is split across two tools on purpose. `dang_ky_hoc_phan` writes the request down
 and hands back a slip code; `xac_nhan_dang_ky` is the only one that puts the student in the
 class. The split is what turns "the student agreed" into something the service can check

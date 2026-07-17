@@ -1,6 +1,17 @@
 """Split a markdown document into retrievable chunks.
 
 Cắt một tài liệu markdown thành các đoạn để tìm kiếm.
+
+Role in the RAG pipeline - INDEXING stage, step 2/7: Chunking.
+It sits between the raw documents (step 1, data/documents/*.md) and embedding
+(step 3, GeminiClient.embed). It turns a long .md file into short passages, each about
+one topic, which is the unit that later gets embedded, stored and retrieved.
+Called by scripts/ingest.py.
+Vai trò trong luồng RAG - giai đoạn INDEXING (nạp kho, chạy offline), bước 2/7: Cắt đoạn.
+Đứng giữa tài liệu thô (bước 1, data/documents/*.md) và sinh embedding (bước 3,
+GeminiClient.embed). Nó biến một file .md dài thành các đoạn ngắn, mỗi đoạn một chủ đề;
+đoạn chính là đơn vị sau đó được đem đi embedding, lưu trữ rồi truy hồi.
+Được gọi bởi scripts/ingest.py.
 """
 
 import re

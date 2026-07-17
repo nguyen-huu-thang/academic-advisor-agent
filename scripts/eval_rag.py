@@ -2,6 +2,13 @@
 
 Đo xem bộ tìm kiếm thực sự lấy đúng đoạn tài liệu bao nhiêu phần trăm.
 
+Role in the RAG pipeline: offline evaluation of step 5 (Retrieval). It serves no student; it
+scores app/rag/retriever.py against a fixed question set to tell whether the retrieval half of
+the pipeline is healthy before anyone trusts the answers built on top of it.
+Vai trò trong luồng RAG: đánh giá offline cho bước 5 (Truy hồi). Nó không phục vụ sinh viên
+nào; nó chấm điểm app/rag/retriever.py trên một bộ câu hỏi cố định để biết nửa truy hồi của
+pipeline có "khỏe" không, trước khi ai đó tin vào các câu trả lời dựng trên nó.
+
 "The service has RAG" says nothing about whether the retrieval works. A pipeline that returns
 the wrong passage still produces a fluent, confident, wrong answer - and the citation at the
 bottom makes it look more trustworthy, not less. So the retriever is scored against a set of

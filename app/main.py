@@ -1,6 +1,13 @@
 """FastAPI entry point.
 
 Điểm khởi động ứng dụng FastAPI.
+
+Role in the RAG pipeline: wiring / startup. On boot it builds the Retriever (step 5) and
+calls retriever.load() once so every chunk embedding (step 4) is read from PostgreSQL into
+memory before the first request, then injects the retriever into the agent's ToolExecutor.
+Vai trò trong luồng RAG: lắp ráp / khởi động. Lúc chạy, nó dựng Retriever (bước 5) và gọi
+retriever.load() một lần để toàn bộ embedding các đoạn (bước 4) được đọc từ PostgreSQL vào
+bộ nhớ trước request đầu tiên, rồi tiêm retriever vào ToolExecutor của agent.
 """
 
 import logging

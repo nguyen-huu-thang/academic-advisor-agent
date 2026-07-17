@@ -1,6 +1,13 @@
 """Application settings loaded from environment variables.
 
 Cấu hình ứng dụng, đọc từ biến môi trường (.env).
+
+Role in the RAG pipeline: cross-cutting config. The knobs that shape retrieval quality live
+here - embedding_model and embedding_dim (step 3, must match what the chunks were indexed
+with) and retrieval_top_k (step 5, how many passages the retriever returns per question).
+Vai trò trong luồng RAG: cấu hình xuyên suốt. Các "núm vặn" quyết định chất lượng truy hồi
+nằm ở đây - embedding_model và embedding_dim (bước 3, phải khớp với lúc đã đánh chỉ mục các
+đoạn) và retrieval_top_k (bước 5, mỗi câu hỏi bộ truy hồi trả về bao nhiêu đoạn).
 """
 
 import os

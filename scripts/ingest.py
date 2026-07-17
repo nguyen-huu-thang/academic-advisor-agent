@@ -2,6 +2,18 @@
 
 Nạp tài liệu của nhà trường vào kho tri thức: cắt đoạn, sinh embedding, lưu vào PostgreSQL.
 
+Role in the RAG pipeline: this script IS the whole INDEXING stage (offline, run once each
+time the documents change). It drives steps 1->4 in order: read the source files (step 1,
+data/documents/*.md), chunk them (step 2, app/rag/chunker.py), embed each chunk (step 3,
+GeminiClient.embed), and store documents + chunk vectors (step 4, tables in app/schema.sql).
+Nothing here runs while serving a student; the online half starts at app/rag/retriever.py.
+Vai trò trong luồng RAG: script này CHÍNH LÀ toàn bộ giai đoạn INDEXING (offline, chạy một
+lần mỗi khi tài liệu thay đổi). Nó thực hiện tuần tự bước 1->4: đọc file nguồn (bước 1,
+data/documents/*.md), cắt đoạn (bước 2, app/rag/chunker.py), sinh embedding cho từng đoạn
+(bước 3, GeminiClient.embed), rồi lưu tài liệu + vector các đoạn (bước 4, các bảng trong
+app/schema.sql). Không phần nào ở đây chạy lúc phục vụ sinh viên; nửa online bắt đầu ở
+app/rag/retriever.py.
+
 Chạy: python -m scripts.ingest
 """
 

@@ -1,6 +1,19 @@
 """The agent loop: plan, call tools, observe results, answer.
 
 Vòng lặp agent: lập kế hoạch, gọi tool, quan sát kết quả, trả lời.
+
+Role in the RAG pipeline: this loop is what actually joins step 6 to step 7. When the model
+calls tim_kiem_quy_che, the retrieved passages come back as a tool result; the loop feeds that
+result back into the next generate() call (step 6, Augmentation) and lets the model write the
+grounded answer over it (step 7, Generation). RAG is only one path here - the same loop also
+carries the tools that read structured student data - but every citation-backed answer is
+produced by this feed-tool-result-then-generate cycle.
+Vai trò trong luồng RAG: chính vòng lặp này mới thực sự nối bước 6 với bước 7. Khi model gọi
+tim_kiem_quy_che, các đoạn truy hồi được trả về dưới dạng kết quả tool; vòng lặp nạp kết quả đó
+vào lần gọi generate() kế tiếp (bước 6, Bổ sung ngữ cảnh) rồi để model viết câu trả lời dựa trên
+đó (bước 7, Sinh câu trả lời). RAG chỉ là một nhánh ở đây - cùng vòng lặp này còn mang các tool
+đọc dữ liệu sinh viên có cấu trúc - nhưng mọi câu trả lời có trích nguồn đều được sinh ra bởi
+chu trình "nạp kết quả tool rồi sinh câu trả lời" này.
 """
 
 import json

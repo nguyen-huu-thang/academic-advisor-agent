@@ -1,6 +1,19 @@
 """Thin wrapper over the Gemini API: embeddings and tool-enabled generation.
 
 Lớp bao mỏng quanh Gemini API: sinh embedding và sinh câu trả lời có dùng tool.
+
+Role in the RAG pipeline: this file provides two of the pipeline's steps.
+  - embed()    -> step 3, Embedding. Turns text into vectors. Used both offline to index
+                  the chunks (is_query=False) and online to embed the query
+                  (is_query=True, called from app/rag/retriever.py).
+  - generate() -> step 7, Generation. The "G" in RAG: given the retrieved passages
+                  (fed back as tool results) it writes the final grounded answer.
+Vai trò trong luồng RAG: file này cung cấp hai bước của pipeline.
+  - embed()    -> bước 3, Sinh embedding. Biến văn bản thành vector. Dùng cả offline để
+                  đánh chỉ mục các đoạn (is_query=False) lẫn online để embed câu hỏi
+                  (is_query=True, gọi từ app/rag/retriever.py).
+  - generate() -> bước 7, Sinh câu trả lời. Chính là chữ "G" trong RAG: dựa trên các đoạn
+                  đã truy hồi (nạp ngược lại dưới dạng kết quả tool) để viết câu trả lời cuối.
 """
 
 import logging
