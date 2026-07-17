@@ -1,15 +1,15 @@
 """What happens when several students go for the last seat at the same instant.
 
-Chuyen gi xay ra khi nhieu sinh vien cung lao vao cho ngoi cuoi cung trong cung mot khoanh khac.
+Chuyện gì xảy ra khi nhiều sinh viên cùng lao vào chỗ ngồi cuối cùng trong cùng một khoảnh khắc.
 
 The guardrail reads the seat count outside any transaction, a moment before the model is even
 asked what to do. By the time a confirmation actually runs, that number may already be stale.
 So the seat is counted a second time, under a row lock, inside the transaction that writes the
 enrolment - and it is that second count which decides.
-Guardrail doc si so ben ngoai moi transaction, tu truoc khi model duoc hoi phai lam gi. Den luc
-mot lenh xac nhan thuc su chay, con so do co the da cu. Vi vay cho ngoi duoc dem lai lan thu hai,
-duoi mot khoa dong, ben trong chinh transaction ghi ban dang ky - va lan dem thu hai do moi la
-lan quyet dinh.
+Guardrail đọc sĩ số bên ngoài mọi transaction, từ trước khi model được hỏi phải làm gì. Đến lúc
+một lệnh xác nhận thực sự chạy, con số đó có thể đã cũ. Vì vậy chỗ ngồi được đếm lại lần thứ hai,
+dưới một khóa dòng, bên trong chính transaction ghi bản đăng ký - và lần đếm thứ hai đó mới là
+lần quyết định.
 
 What the lock is for was measured, not assumed. Running this same scenario against a copy of
 execute_registration with FOR UPDATE taken out still ends with 1 student in a 1-seat class: the
@@ -18,20 +18,20 @@ instead of a RegistrationRejected, which in the running service means a 500 rath
 class just filled up". So the assertions below check not only that one student got in, but that
 the other 19 were turned away *through the intended path* - if they came back as raw database
 errors, the threads would die and the result count would not add up.
-Muc dich cua cai khoa la thu do duoc, khong phai thu suy doan. Chay dung kich ban nay tren mot
-ban sao cua execute_registration da bo FOR UPDATE thi ket cuc van la 1 sinh vien trong mot lop 1
-cho: rang buoc CHECK giu duoc phong tuyen. Nhung 19 nguoi con lai that bai voi CheckViolation do
-PostgreSQL nem ra, chu khong phai RegistrationRejected, ma trong dich vu dang chay thi dieu do
-nghia la loi 500 thay vi cau "lop vua het cho". Vi vay cac phep khang dinh ben duoi kiem tra
-khong chi rang mot sinh vien da vao duoc, ma con rang 19 nguoi kia bi tu choi *dung theo duong
-da thiet ke* - neu ho quay ve duoi dang loi database tho, cac luong se chet va so ket qua dem
-duoc se khong khop.
+Mục đích của cái khóa là thứ đo được, không phải thứ suy đoán. Chạy đúng kịch bản này trên một
+bản sao của execute_registration đã bỏ FOR UPDATE thì kết cục vẫn là 1 sinh viên trong một lớp 1
+chỗ: ràng buộc CHECK giữ được phòng tuyến. Nhưng 19 người còn lại thất bại với CheckViolation do
+PostgreSQL ném ra, chứ không phải RegistrationRejected, mà trong dịch vụ đang chạy thì điều đó
+nghĩa là lỗi 500 thay vì câu "lớp vừa hết chỗ". Vì vậy các phép khẳng định bên dưới kiểm tra
+không chỉ rằng một sinh viên đã vào được, mà còn rằng 19 người kia bị từ chối *đúng theo đường
+đã thiết kế* - nếu họ quay về dưới dạng lỗi database thô, các luồng sẽ chết và số kết quả đếm
+được sẽ không khớp.
 
 These tests need a real PostgreSQL: a lock that is never contended proves nothing.
-Cac bai test nay can PostgreSQL that: mot cai khoa khong bao gio bi tranh chap thi khong chung
-minh duoc dieu gi.
+Các bài test này cần PostgreSQL thật: một cái khóa không bao giờ bị tranh chấp thì không chứng
+minh được điều gì.
 
-Chay: pytest tests/test_registration_concurrency.py -v
+Chạy: pytest tests/test_registration_concurrency.py -v
 """
 
 import threading
@@ -47,8 +47,8 @@ pytestmark = pytest.mark.integration
 
 # More contenders than the database pool allows, on purpose: each thread opens its own
 # connection, so the fight happens in PostgreSQL and not in a queue in front of it.
-# Co y de so nguoi tranh nhau nhieu hon so ket noi trong pool: moi luong tu mo ket noi rieng,
-# nen cuoc gianh giat dien ra trong PostgreSQL chu khong phai trong mot hang doi dung truoc no.
+# Cố ý để số người tranh nhau nhiều hơn số kết nối trong pool: mỗi luồng tự mở kết nối riêng,
+# nên cuộc giành giật diễn ra trong PostgreSQL chứ không phải trong một hàng đợi đứng trước nó.
 CONTENDERS = 20
 
 SEMESTER = "9999.9"
@@ -59,12 +59,12 @@ COURSE_CODE = "TEST999"
 def settings() -> Settings:
     """The real settings, which is where the credit ceiling per academic status comes from.
 
-    Cau hinh that, von la noi quyet dinh tran tin chi ung voi tung tinh trang hoc vu.
+    Cấu hình thật, vốn là nơi quyết định trần tín chỉ ứng với từng tình trạng học vụ.
 
     The confirmation transaction re-runs the six registration rules under lock, and the credit
     ceiling is one of them, so it needs to know what the ceiling is.
-    Transaction xac nhan chay lai sau quy tac dang ky duoi khoa, ma tran tin chi la mot trong so
-    do, nen no can biet tran la bao nhieu.
+    Transaction xác nhận chạy lại sáu quy tắc đăng ký dưới khóa, mà trần tín chỉ là một trong số
+    đó, nên nó cần biết trần là bao nhiêu.
     """
     return load_settings()
 
@@ -83,7 +83,7 @@ def database_url(settings: Settings) -> str:
 def contested_class(database_url: str):
     """One class with exactly one free seat, and CONTENDERS students each holding a slip for it.
 
-    Mot lop con dung mot cho trong, va CONTENDERS sinh vien, moi nguoi cam mot phieu vao lop do.
+    Một lớp còn đúng một chỗ trống, và CONTENDERS sinh viên, mỗi người cầm một phiếu vào lớp đó.
     """
     with psycopg.connect(database_url, row_factory=dict_row, autocommit=True) as conn:
         _cleanup(conn)
@@ -92,10 +92,10 @@ def contested_class(database_url: str):
         # re-checks all six rules under lock, and "registration is open" is one of them, so a
         # semester with no window at all would see every confirmation refused for the wrong
         # reason and the test would pass while proving nothing.
-        # Dot dang ky phai dang mo cho hoc ky kiem thu. Transaction xac nhan bay gio kiem tra lai
-        # ca sau quy tac duoi khoa, ma "dang trong thoi gian mo dang ky" la mot trong so do, nen
-        # mot hoc ky khong co khung thoi gian nao se khien moi lenh xac nhan bi tu choi vi mot ly
-        # do khac, va bai test se pass ma khong chung minh duoc gi.
+        # Đợt đăng ký phải đang mở cho học kỳ kiểm thử. Transaction xác nhận bây giờ kiểm tra lại
+        # cả sáu quy tắc dưới khóa, mà "đang trong thời gian mở đăng ký" là một trong số đó, nên
+        # một học kỳ không có khung thời gian nào sẽ khiến mọi lệnh xác nhận bị từ chối vì một lý
+        # do khác, và bài test sẽ pass mà không chứng minh được gì.
         _open_registration(conn)
 
         conn.execute(
@@ -171,14 +171,14 @@ def _confirm(
 ) -> str:
     """Confirm one slip, having first waited for every other thread to be ready.
 
-    Xac nhan mot phieu, sau khi da doi cho moi luong khac cung san sang.
+    Xác nhận một phiếu, sau khi đã đợi cho mọi luồng khác cùng sẵn sàng.
 
     The barrier is the point of the whole test. Without it the threads would trickle in one
     after another and the lock would never actually be contended, so the test would pass even
     if the locking were wrong.
-    Cai hang rao dong bo nay chinh la muc dich cua ca bai test. Neu khong co no, cac luong se
-    lac dac vao tung cai mot va cai khoa se khong bao gio thuc su bi tranh chap, nen bai test
-    van se pass ngay ca khi phan khoa bi sai.
+    Cái hàng rào đồng bộ này chính là mục đích của cả bài test. Nếu không có nó, các luồng sẽ
+    lác đác vào từng cái một và cái khóa sẽ không bao giờ thực sự bị tranh chấp, nên bài test
+    vẫn sẽ pass ngay cả khi phần khóa bị sai.
     """
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         barrier.wait()
@@ -210,9 +210,9 @@ def test_only_one_student_gets_the_last_seat(database_url, settings, contested_c
     # Every thread came back through one of the two intended outcomes. A thread that died on a
     # raw CheckViolation would never have appended anything, so a short list here is itself the
     # signal that the lock is not doing its job.
-    # Moi luong deu quay ve qua mot trong hai ket cuc da thiet ke. Mot luong chet vi CheckViolation
-    # tho se khong kip ghi lai gi ca, nen danh sach bi thieu o day tu no da la dau hieu cho thay
-    # cai khoa khong lam dung viec cua no.
+    # Mọi luồng đều quay về qua một trong hai kết cục đã thiết kế. Một luồng chết vì CheckViolation
+    # thô sẽ không kịp ghi lại gì cả, nên danh sách bị thiếu ở đây tự nó đã là dấu hiệu cho thấy
+    # cái khóa không làm đúng việc của nó.
     assert len(results) == CONTENDERS, (
         f"Chi {len(results)}/{CONTENDERS} luong tra ve mot ket cuc co kiem soat. "
         "So con lai da chet vi loi database tho."
@@ -232,8 +232,8 @@ def test_only_one_student_gets_the_last_seat(database_url, settings, contested_c
 
     # The counter and the actual rows must agree. A class that says 1 of 1 while holding two
     # students in it is the failure this whole design exists to prevent.
-    # Bo dem va so dong thuc te phai khop nhau. Mot lop ghi la 1 tren 1 nhung ben trong lai chua
-    # hai sinh vien chinh la that bai ma toan bo thiet ke nay sinh ra de ngan chan.
+    # Bộ đếm và số dòng thực tế phải khớp nhau. Một lớp ghi là 1 trên 1 nhưng bên trong lại chứa
+    # hai sinh viên chính là thất bại mà toàn bộ thiết kế này sinh ra để ngăn chặn.
     assert section["enrolled"] == 1
     assert section["enrolled"] <= section["capacity"]
     assert enrolled["n"] == 1
@@ -244,8 +244,8 @@ def test_confirming_the_same_slip_twice_enrols_the_student_once(
 ):
     # A retried HTTP request, or a model that calls the tool twice, must not enrol the student
     # twice. The slip is claimed by the UPDATE itself, so the second attempt claims nothing.
-    # Mot request HTTP bi gui lai, hay mot model goi tool hai lan, khong duoc phep ghi danh sinh
-    # vien hai lan. Phieu duoc gianh bang chinh cau UPDATE, nen lan thu hai khong gianh duoc gi.
+    # Một request HTTP bị gửi lại, hay một model gọi tool hai lần, không được phép ghi danh sinh
+    # viên hai lần. Phiếu được giành bằng chính câu UPDATE, nên lần thứ hai không giành được gì.
     section_id, slips = contested_class
     slip_id = slips[0]
 
@@ -272,14 +272,14 @@ CLASH_STUDENT = "TESTCLASH1"
 def clashing_classes(database_url: str):
     """One student, two roomy classes whose timetables overlap, and a slip for each.
 
-    Mot sinh vien, hai lop con rong nhung lich hoc chong len nhau, va mot phieu cho moi lop.
+    Một sinh viên, hai lớp còn rộng nhưng lịch học chồng lên nhau, và một phiếu cho mỗi lớp.
 
     Nothing here is contested between students: both classes have 50 free seats, so the class
     lock has nothing to do. The contest is inside one student's own timetable, which is precisely
     the collision the class lock was never able to see.
-    O day khong co gi bi tranh chap giua cac sinh vien: ca hai lop deu con 50 cho, nen khoa lop
-    khong co viec gi de lam. Cuoc tranh chap nam ngay trong thoi khoa bieu cua chinh mot sinh vien,
-    va do dung la va cham ma khoa lop khong bao gio nhin thay duoc.
+    Ở đây không có gì bị tranh chấp giữa các sinh viên: cả hai lớp đều còn 50 chỗ, nên khóa lớp
+    không có việc gì để làm. Cuộc tranh chấp nằm ngay trong thời khóa biểu của chính một sinh viên,
+    và đó đúng là va chạm mà khóa lớp không bao giờ nhìn thấy được.
     """
     with psycopg.connect(database_url, row_factory=dict_row, autocommit=True) as conn:
         _cleanup(conn)
@@ -295,7 +295,7 @@ def clashing_classes(database_url: str):
 
         slips = []
         # Thursday, periods 1-3 and 2-4: they overlap on periods 2 and 3.
-        # Thu 5, tiet 1-3 va tiet 2-4: chung chong nhau o tiet 2 va tiet 3.
+        # Thứ 5, tiết 1-3 và tiết 2-4: chúng chồng nhau ở tiết 2 và tiết 3.
         for index, (code, start, end) in enumerate([("TESTC1", 1, 3), ("TESTC2", 2, 4)]):
             conn.execute(
                 """
@@ -339,16 +339,16 @@ def test_one_student_cannot_confirm_two_clashing_classes_at_once(
 ):
     """The hole the class lock never covered, and the student lock now does.
 
-    Lo hong ma khoa lop khong bao gio cham toi, va gio khoa sinh vien bit lai.
+    Lỗ hổng mà khóa lớp không bao giờ chạm tới, và giờ khóa sinh viên bịt lại.
 
     The guardrail reads the student's enrolments once, at the start of the turn, outside any
     transaction. Two confirmations racing for the same student both read that same empty list,
     both find no clash, and - before the student row was locked - both went through, leaving the
     student booked into two classes at the same hour of the same day.
-    Guardrail doc danh sach lop cua sinh vien mot lan, tu dau luot, ben ngoai moi transaction. Hai
-    lenh xac nhan chay dua cho cung mot sinh vien deu doc cung mot danh sach rong do, deu thay
-    khong trung lich, va - truoc khi dong sinh vien duoc khoa - ca hai deu di qua, de lai sinh vien
-    bi xep vao hai lop cung mot khung gio cua cung mot ngay.
+    Guardrail đọc danh sách lớp của sinh viên một lần, từ đầu lượt, bên ngoài mọi transaction. Hai
+    lệnh xác nhận chạy đua cho cùng một sinh viên đều đọc cùng một danh sách rỗng đó, đều thấy
+    không trùng lịch, và - trước khi dòng sinh viên được khóa - cả hai đều đi qua, để lại sinh viên
+    bị xếp vào hai lớp cùng một khung giờ của cùng một ngày.
     """
     slips = clashing_classes
     barrier = threading.Barrier(len(slips))
@@ -382,7 +382,7 @@ def test_one_student_cannot_confirm_two_clashing_classes_at_once(
         ).fetchone()
 
     # The claim that matters, read from the database rather than from the threads' own report.
-    # Phep khang dinh quan trong nhat, doc tu database chu khong doc tu bao cao cua chinh cac luong.
+    # Phép khẳng định quan trọng nhất, đọc từ database chứ không đọc từ báo cáo của chính các luồng.
     assert enrolments["n"] == 1, (
         f"Sinh vien co {enrolments['n']} lop trong hoc ky, dang le chi duoc 1: "
         "hai lop trung lich da cung lot qua."
@@ -395,9 +395,9 @@ def test_database_refuses_to_overfill_a_class_even_if_the_code_is_wrong(
     # The last line of defence, below all the application logic: the CHECK constraint. If a
     # future refactor ever dropped the lock, or miscounted, PostgreSQL would still not let the
     # class hold more students than it has seats.
-    # Lop phong thu cuoi cung, nam duoi moi logic ung dung: rang buoc CHECK. Neu mot lan refactor
-    # nao do sau nay lam mat cai khoa, hoac dem sai, PostgreSQL van khong cho lop chua nhieu sinh
-    # vien hon so cho no co.
+    # Lớp phòng thủ cuối cùng, nằm dưới mọi logic ứng dụng: ràng buộc CHECK. Nếu một lần refactor
+    # nào đó sau này làm mất cái khóa, hoặc đếm sai, PostgreSQL vẫn không cho lớp chứa nhiều sinh
+    # viên hơn số chỗ nó có.
     section_id, _ = contested_class
 
     with psycopg.connect(database_url, row_factory=dict_row) as conn:

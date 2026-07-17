@@ -1,6 +1,6 @@
 """FastAPI entry point.
 
-Diem khoi dong ung dung FastAPI.
+Điểm khởi động ứng dụng FastAPI.
 """
 
 import logging
@@ -26,13 +26,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Everything before `yield` runs once at startup; everything after runs once at shutdown.
+    # Mọi thứ trước `yield` chạy một lần lúc khởi động; mọi thứ sau chạy một lần lúc tắt.
     settings = load_settings()
     client = GeminiClient(settings)
 
     # Chunk embeddings are loaded once at startup, so the first student request does not pay
     # for reading the whole knowledge base out of the database.
-    # Embedding cua cac doan tai lieu duoc nap mot lan luc khoi dong, de request dau tien cua
-    # sinh vien khong phai ganh chi phi doc toan bo kho tri thuc tu database.
+    # Embedding của các đoạn tài liệu được nạp một lần lúc khởi động, để request đầu tiên của
+    # sinh viên không phải gánh chi phí đọc toàn bộ kho tri thức từ database.
     retriever = Retriever(client)
     chunks_loaded = retriever.load()
     logger.info("Da nap %d doan tai lieu vao bo nho.", chunks_loaded)

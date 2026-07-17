@@ -1,17 +1,17 @@
 """Create the schema and seed the simulated student records.
 
-Tao luoc do va nap du lieu sinh vien mo phong.
+Tạo lược đồ và nạp dữ liệu sinh viên mô phỏng.
 
 The courses, credits and prerequisites here must match data/documents/chuong-trinh-dao-tao.md,
 and the grading rules come from app/grading.py which matches data/documents/quy-che-dao-tao.md.
 If they drifted apart, the assistant would quote one rule from the regulation and then enforce
 a different one from the database.
-Danh sach mon, so tin chi va quan he tien quyet o day phai khop voi
-data/documents/chuong-trinh-dao-tao.md, con quy tac tinh diem lay tu app/grading.py von da khop
-voi data/documents/quy-che-dao-tao.md. Neu chung lech nhau, tro ly se trich mot quy tac tu quy
-che roi lai ap dung mot quy tac khac tu database.
+Danh sách môn, số tín chỉ và quan hệ tiên quyết ở đây phải khớp với
+data/documents/chuong-trinh-dao-tao.md, còn quy tắc tính điểm lấy từ app/grading.py vốn đã khớp
+với data/documents/quy-che-dao-tao.md. Nếu chúng lệch nhau, trợ lý sẽ trích một quy tắc từ quy
+chế rồi lại áp dụng một quy tắc khác từ database.
 
-Chay: python -m scripts.init_db
+Chạy: python -m scripts.init_db
 """
 
 from datetime import datetime, timedelta
@@ -29,10 +29,10 @@ SCHEMA_PATH = Path(__file__).resolve().parent.parent / "app" / "schema.sql"
 # log in with. A real university issues each student their own and never prints it anywhere; this
 # is seed data for a simulation, and the only reason it can be written down here is that these
 # three students do not exist.
-# Mat khau dung chung cua ba sinh vien mo phong, de ban demo va README co cai ma dang nhap. Mot
-# truong dai hoc that thi cap cho moi sinh vien mot mat khau rieng va khong bao gio in no ra o
-# dau ca; day la du lieu mo phong, va ly do duy nhat viet duoc no ra day la ba sinh vien nay
-# khong co that.
+# Mật khẩu dùng chung của ba sinh viên mô phỏng, để bản demo và README có cái mà đăng nhập. Một
+# trường đại học thật thì cấp cho mỗi sinh viên một mật khẩu riêng và không bao giờ in nó ra ở
+# đâu cả; đây là dữ liệu mô phỏng, và lý do duy nhất viết được nó ra đây là ba sinh viên này
+# không có thật.
 DEMO_PASSWORD = "Sinhvien@2026"
 
 # (course_code, course_name, credits, department, is_required)
@@ -68,8 +68,8 @@ PREREQUISITES = [
     ("INT3110", "INT2011"),
     # Artificial Intelligence needs both discrete maths and data structures. This is the
     # prerequisite the demo tries to talk its way past.
-    # Tri tue nhan tao can ca Toan roi rac lan Cau truc du lieu. Day chinh la mon tien quyet
-    # ma kich ban demo se tim cach noi khich de vuot qua.
+    # Trí tuệ nhân tạo cần cả Toán rời rạc lẫn Cấu trúc dữ liệu. Đây chính là môn tiên quyết
+    # mà kịch bản demo sẽ tìm cách nói khích để vượt qua.
     ("INT3401", "MAT1101"),
     ("INT3401", "INT2010"),
     ("INT3405", "MAT1104"),
@@ -82,20 +82,20 @@ PREREQUISITES = [
 # (course_code, section_no, lecturer, capacity, enrolled, day_of_week, start, end, room)
 # `enrolled` is the number of students already in the class who are not among the three
 # seeded below; the seeded enrolments are added on top afterwards.
-# `enrolled` la so sinh vien da co trong lop nhung khong nam trong ba sinh vien duoc seed ben
-# duoi; cac dong dang ky cua ho se duoc cong them vao sau.
+# `enrolled` là số sinh viên đã có trong lớp nhưng không nằm trong ba sinh viên được seed bên
+# dưới; các dòng đăng ký của họ sẽ được cộng thêm vào sau.
 SECTIONS = [
     ("INT3401", "01", "TS. Nguyen Van Hung", 60, 45, 3, 1, 3, "GD2-301"),
     # Full on purpose: registering here must be refused however the request is phrased.
-    # Co y de day: dang ky vao lop nay phai bi tu choi du yeu cau duoc dien dat kieu gi.
+    # Cố ý để đầy: đăng ký vào lớp này phải bị từ chối dù yêu cầu được diễn đạt kiểu gì.
     ("INT3401", "02", "TS. Nguyen Van Hung", 50, 50, 5, 7, 9, "GD2-302"),
     # Clashes with INT3401 section 01: same weekday, periods 2-4 overlap periods 1-3.
-    # Trung lich voi INT3401 lop 01: cung thu, tiet 2-4 giao voi tiet 1-3.
+    # Trùng lịch với INT3401 lớp 01: cùng thứ, tiết 2-4 giao với tiết 1-3.
     ("INT3405", "01", "PGS.TS. Tran Thu Ha", 40, 20, 3, 2, 4, "GD2-305"),
     ("INT3306", "01", "ThS. Le Quang Vinh", 50, 30, 2, 1, 3, "GD1-201"),
     ("INT3117", "01", "ThS. Pham Thi Mai", 40, 10, 2, 7, 9, "GD1-202"),
     # One seat left: this is the class the concurrency test fights over.
-    # Chi con mot cho: day la lop ma bai test tranh chap dong thoi se gianh nhau.
+    # Chỉ còn một chỗ: đây là lớp mà bài test tranh chấp đồng thời sẽ giành nhau.
     ("INT3502", "01", "TS. Do Minh Tuan", 45, 44, 4, 7, 9, "GD2-401"),
     ("MAT1101", "01", "TS. Vu Thi Lan", 80, 50, 5, 1, 3, "GD3-101"),
     ("MAT1093", "01", "TS. Vu Thi Lan", 80, 60, 6, 1, 3, "GD3-102"),
@@ -111,8 +111,8 @@ SECTIONS = [
 # (student_id, full_name, major, cohort)
 # GPA, credits earned and academic status are computed from the grades below rather than
 # written down here, so the three can never contradict each other.
-# GPA, so tin chi tich luy va tinh trang hoc vu duoc tinh tu bang diem ben duoi chu khong ghi
-# san o day, nen ba con so nay khong bao gio co the mau thuan voi nhau.
+# GPA, số tín chỉ tích lũy và tình trạng học vụ được tính từ bảng điểm bên dưới chứ không ghi
+# sẵn ở đây, nên ba con số này không bao giờ có thể mâu thuẫn với nhau.
 STUDENTS = [
     ("22021001", "Nguyen Van An", "Cong nghe thong tin", "K67"),
     ("22021002", "Tran Thi Binh", "Cong nghe thong tin", "K67"),
@@ -123,8 +123,8 @@ STUDENTS = [
 GRADES: dict[str, list[tuple[str, str, str]]] = {
     # An is a solid student with one hole in his record: he failed Discrete Maths, which is
     # a prerequisite of Artificial Intelligence. Everything in the demo hangs off this 3.5.
-    # An hoc kha, chi co dung mot lo hong trong bang diem: em truot Toan roi rac, von la mon
-    # tien quyet cua Tri tue nhan tao. Toan bo kich ban demo xoay quanh con 3.5 nay.
+    # An học khá, chỉ có đúng một lỗ hổng trong bảng điểm: em trượt Toán rời rạc, vốn là môn
+    # tiên quyết của Trí tuệ nhân tạo. Toàn bộ kịch bản demo xoay quanh con 3.5 này.
     "22021001": [
         ("INT1008", "2024.1", "8.0"),
         ("MAT1041", "2024.1", "7.5"),
@@ -138,7 +138,7 @@ GRADES: dict[str, list[tuple[str, str, str]]] = {
         ("INT2207", "2025.2", "7.0"),
     ],
     # Binh is on academic warning: her GPA is below 2.0, so her credit ceiling drops to 18.
-    # Binh dang bi canh bao hoc vu: GPA duoi 2.0, nen tran tin chi cua em tut xuong con 18.
+    # Bình đang bị cảnh báo học vụ: GPA dưới 2.0, nên trần tín chỉ của em tụt xuống còn 18.
     "22021002": [
         ("INT1008", "2024.1", "5.5"),
         ("MAT1041", "2024.1", "4.5"),
@@ -147,8 +147,8 @@ GRADES: dict[str, list[tuple[str, str, str]]] = {
     ],
     # Cuong has passed everything, so he is the one who can actually register and therefore
     # the one who runs into the timetable clash and the full class.
-    # Cuong da dat het cac mon, nen em la nguoi thuc su dang ky duoc, va cung la nguoi se gap
-    # tinh huong trung lich va lop da day.
+    # Cường đã đạt hết các môn, nên em là người thực sự đăng ký được, và cũng là người sẽ gặp
+    # tình huống trùng lịch và lớp đã đầy.
     "22021003": [
         ("INT1008", "2024.1", "9.0"),
         ("MAT1041", "2024.1", "8.5"),
@@ -166,11 +166,11 @@ GRADES: dict[str, list[tuple[str, str, str]]] = {
 }
 
 # Classes already registered for the current semester, as (student_id, course_code, section_no).
-# Binh sits at 17 credits, two below her ceiling of 18, so any further 3-credit course pushes
+# Binh sits at 17 credits, one below her ceiling of 18, so any further 3-credit course pushes
 # her over it. That is the credit-ceiling scenario in the demo.
-# Cac lop da dang ky san cho hoc ky hien tai. Binh dang o 17 tin chi, kem tran 18 dung 1 tin,
-# nen bat ky mon 3 tin chi nao dang ky them cung se lam em vuot tran. Do la kich ban tran tin
-# chi trong demo.
+# Các lớp đã đăng ký sẵn cho học kỳ hiện tại. Bình đang ở 17 tín chỉ, kém trần 18 đúng 1 tín,
+# nên bất kỳ môn 3 tín chỉ nào đăng ký thêm cũng sẽ làm em vượt trần. Đó là kịch bản trần tín
+# chỉ trong demo.
 EXISTING_ENROLMENTS = [
     ("22021002", "MAT1042", "01"),
     ("22021002", "MAT1104", "01"),
@@ -180,21 +180,21 @@ EXISTING_ENROLMENTS = [
 ]
 
 # The academic warning thresholds, matching data/documents/quy-che-dao-tao.md.
-# Cac nguong canh bao hoc vu, khop voi data/documents/quy-che-dao-tao.md.
+# Các ngưỡng cảnh báo học vụ, khớp với data/documents/quy-che-dao-tao.md.
 WARNING_THRESHOLD = Decimal("2.0")
 
 
 def academic_status(gpa: Decimal) -> str:
     """Derive the academic status from the cumulative GPA.
 
-    Suy ra tinh trang hoc vu tu diem trung binh chung tich luy.
+    Suy ra tình trạng học vụ từ điểm trung bình chung tích lũy.
 
     A real registrar would also look at the previous semester's result to tell warning level
     one from level two. There is no semester history here, so the seed only distinguishes
     "warned" from "not warned" and leaves level two to be set by hand when a scenario needs it.
-    Phong dao tao that con phai nhin ket qua ky truoc de phan biet canh bao muc 1 voi muc 2. O
-    day khong co lich su hoc ky, nen du lieu seed chi phan biet "bi canh bao" va "khong bi canh
-    bao", con muc 2 thi dat tay khi nao kich ban can toi.
+    Phòng đào tạo thật còn phải nhìn kết quả kỳ trước để phân biệt cảnh báo mức 1 với mức 2. Ở
+    đây không có lịch sử học kỳ, nên dữ liệu seed chỉ phân biệt "bị cảnh báo" và "không bị cảnh
+    báo", còn mức 2 thì đặt tay khi nào kịch bản cần tới.
     """
     return "binh_thuong" if gpa >= WARNING_THRESHOLD else "canh_bao_1"
 
@@ -209,7 +209,7 @@ def main() -> None:
         conn.execute(schema_sql)
 
         # Order matters: children before parents, or the foreign keys refuse the delete.
-        # Thu tu quan trong: xoa bang con truoc bang cha, neu khong khoa ngoai se chan lai.
+        # Thứ tự quan trọng: xóa bảng con trước bảng cha, nếu không khóa ngoại sẽ chặn lại.
         conn.execute("DELETE FROM tool_audit_log")
         conn.execute("DELETE FROM messages")
         conn.execute("DELETE FROM refresh_tokens")
@@ -251,6 +251,10 @@ def main() -> None:
         )
 
         for student_id, full_name, major, cohort in STUDENTS:
+            # GPA and earned credits are computed from the seeded grades with the very same
+            # functions the tools use, so the seed can never disagree with the regulation.
+            # GPA và tín chỉ tích lũy được tính từ bảng điểm seed bằng chính các hàm mà tool
+            # dùng, nên dữ liệu seed không bao giờ lệch với quy chế.
             entries = [
                 (Decimal(score), credits_of[course])
                 for course, _, score in GRADES[student_id]
@@ -273,9 +277,9 @@ def main() -> None:
                     # Hashed once per student rather than hashed once and reused, so that three
                     # students with the same password still end up with three different hashes.
                     # That is what the salt is for, and seeding is no reason to skip it.
-                    # Bam rieng cho tung sinh vien thay vi bam mot lan roi dung lai, de ba sinh
-                    # vien cung mat khau van cho ra ba ban bam khac nhau. Salt sinh ra la de lam
-                    # viec do, va viec nap du lieu mau khong phai ly do de bo qua no.
+                    # Băm riêng cho từng sinh viên thay vì băm một lần rồi dùng lại, để ba sinh
+                    # viên cùng mật khẩu vẫn cho ra ba bản băm khác nhau. Salt sinh ra là để làm
+                    # việc đó, và việc nạp dữ liệu mẫu không phải lý do để bỏ qua nó.
                     hash_password(DEMO_PASSWORD),
                     gpa,
                     earned_credits(entries),
@@ -297,9 +301,9 @@ def main() -> None:
         # Registering a seeded student bumps the class counter, exactly as a real
         # registration would. Writing the row without the bump would leave `enrolled`
         # disagreeing with the rows in `enrollments` from the very first day.
-        # Ghi mot dong dang ky cho sinh vien seed thi cung phai tang bo dem cua lop, dung nhu
-        # mot lan dang ky that. Neu chi ghi dong ma quen tang bo dem, `enrolled` se lech voi
-        # cac dong trong `enrollments` ngay tu ngay dau tien.
+        # Ghi một dòng đăng ký cho sinh viên seed thì cũng phải tăng bộ đếm của lớp, đúng như
+        # một lần đăng ký thật. Nếu chỉ ghi dòng mà quên tăng bộ đếm, `enrolled` sẽ lệch với
+        # các dòng trong `enrollments` ngay từ ngày đầu tiên.
         for student_id, course_code, section_no in EXISTING_ENROLMENTS:
             section = conn.execute(
                 """
@@ -321,6 +325,10 @@ def main() -> None:
                 (section["id"],),
             )
 
+        # The registration window opened a week ago and closes in two weeks, so the demo
+        # always runs inside an open window.
+        # Đợt đăng ký mở từ một tuần trước và đóng sau hai tuần nữa, nên demo luôn chạy
+        # trong lúc đợt đăng ký đang mở.
         now = datetime.now()
         conn.execute(
             """

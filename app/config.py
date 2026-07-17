@@ -1,6 +1,6 @@
 """Application settings loaded from environment variables.
 
-Cau hinh ung dung, doc tu bien moi truong (.env).
+Cấu hình ứng dụng, đọc từ biến môi trường (.env).
 """
 
 import os
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Price per 1 million tokens in USD, taken from the official Gemini pricing page.
-# Gia moi 1 trieu token (USD), lay tu trang gia chinh thuc cua Gemini.
+# Giá mỗi 1 triệu token (USD), lấy từ trang giá chính thức của Gemini.
 PRICE_PER_1M_TOKENS: dict[str, dict[str, float]] = {
     "gemini-3.5-flash": {"input": 1.50, "output": 9.00},
     "gemini-3-flash-preview": {"input": 0.50, "output": 3.00},
@@ -25,13 +25,15 @@ PRICE_PER_1M_TOKENS: dict[str, dict[str, float]] = {
 # A signing key short enough to brute-force offline is the same as no signing key: whoever
 # recovers it can mint a token for any student. There is no safe default here, so the service
 # refuses to start rather than fall back to one.
-# Mot khoa ky ngan den muc co the do vet can ngoai tuyen thi cung nhu khong co khoa ky: ai lay
-# lai duoc no la cap duoc token cho bat ky sinh vien nao. O day khong co gia tri mac dinh nao la
-# an toan, nen dich vu tu choi khoi dong chu khong lay dai mot gia tri.
+# Một khóa ký ngắn đến mức có thể dò vét cạn ngoại tuyến thì cũng như không có khóa ký: ai lấy
+# lại được nó là cấp được token cho bất kỳ sinh viên nào. Ở đây không có giá trị mặc định nào là
+# an toàn, nên dịch vụ từ chối khởi động chứ không lấy đại một giá trị.
 MIN_JWT_SECRET_LENGTH = 32
 
 
 def _require(name: str) -> str:
+    # Read a mandatory environment variable; a missing value stops the service at startup.
+    # Đọc một biến môi trường bắt buộc; thiếu giá trị thì dịch vụ dừng ngay lúc khởi động.
     value = os.getenv(name)
     if not value:
         raise RuntimeError(
@@ -41,6 +43,8 @@ def _require(name: str) -> str:
 
 
 def _require_secret(name: str) -> str:
+    # Like _require, but also enforces a minimum length suitable for signing keys.
+    # Như _require, nhưng đòi thêm độ dài tối thiểu phù hợp cho khóa ký.
     value = _require(name)
     if len(value) < MIN_JWT_SECRET_LENGTH:
         raise RuntimeError(
@@ -63,8 +67,8 @@ class Settings:
     # Authentication. The service both issues and verifies its own access tokens, so it needs
     # the signing key, the two claims that say a token was meant for this service, and how long
     # a token stays good for.
-    # Xac thuc. Dich vu vua tu cap vua tu xac minh access token cua chinh no, nen no can khoa ky,
-    # hai claim noi len rang token duoc cap cho dung dich vu nay, va thoi han token con hieu luc.
+    # Xác thực. Dịch vụ vừa tự cấp vừa tự xác minh access token của chính nó, nên nó cần khóa ký,
+    # hai claim nói lên rằng token được cấp cho đúng dịch vụ này, và thời hạn token còn hiệu lực.
     jwt_secret: str
     jwt_issuer: str
     jwt_audience: str
@@ -72,20 +76,20 @@ class Settings:
     # Its lifetime IS the revocation delay: a student whose session is revoked keeps working for
     # at most this long. Fifteen minutes is the price paid for not touching the database on every
     # single request, and it is a price worth naming out loud rather than leaving implicit.
-    # Access token khong duoc luu o dau, nen khong the rut lai truoc han. Thoi gian song cua no
-    # CHINH LA do tre cua viec thu hoi: mot sinh vien bi thu hoi phien van dung duoc nhieu nhat
-    # bang khoang thoi gian nay. Muoi lam phut la cai gia phai tra cho viec khong cham vao database
-    # o moi request, va do la cai gia dang duoc goi ten ra thay vi de ngam.
+    # Access token không được lưu ở đâu, nên không thể rút lại trước hạn. Thời gian sống của nó
+    # CHÍNH LÀ độ trễ của việc thu hồi: một sinh viên bị thu hồi phiên vẫn dùng được nhiều nhất
+    # bằng khoảng thời gian này. Mười lăm phút là cái giá phải trả cho việc không chạm vào database
+    # ở mỗi request, và đó là cái giá đáng được gọi tên ra thay vì để ngầm.
     access_token_ttl_minutes: int
     refresh_token_ttl_days: int
     # Whether the refresh cookie carries the Secure flag, which stops the browser from ever
     # sending it over plain HTTP. True everywhere that matters; the only reason it can be turned
     # off is that a local dev server speaks http, and a Secure cookie would simply never be sent.
     # Default is on: a footgun should have to be picked up deliberately.
-    # Cookie refresh co mang co Secure hay khong, von la thu ngan trinh duyet gui no qua HTTP tran.
-    # Bat o moi noi dang ke; ly do duy nhat de tat no la may chu dev cuc bo chay http, va mot cookie
-    # Secure thi se khong bao gio duoc gui di. Mac dinh la bat: mot khau sung tu ban chan minh thi
-    # phai co y nhat len moi cam duoc.
+    # Cookie refresh có mang cờ Secure hay không, vốn là thứ ngăn trình duyệt gửi nó qua HTTP trần.
+    # Bật ở mọi nơi đáng kể; lý do duy nhất để tắt nó là máy chủ dev cục bộ chạy http, và một cookie
+    # Secure thì sẽ không bao giờ được gửi đi. Mặc định là bật: một khẩu súng tự bắn chân mình thì
+    # phải cố ý nhặt lên mới cầm được.
     cookie_secure: bool
     login_max_attempts: int
     login_lockout_minutes: int
@@ -93,26 +97,26 @@ class Settings:
     # /metrics and /stats report what the service costs to run - token counts, USD spent, how
     # often the guardrail fires - which is the operator's business and nobody else's. A student
     # who can log in should not thereby be able to read the bill.
-    # Mot khoa bi mat rieng cho cac endpoint van hanh, co y khong dung token cua sinh vien.
-    # /metrics va /stats bao cao chi phi van hanh cua dich vu - so token, so tien USD da tieu, so
-    # lan guardrail chan - von la viec cua nguoi van hanh chu khong phai cua ai khac. Mot sinh vien
-    # dang nhap duoc thi khong vi the ma doc duoc hoa don.
+    # Một khóa bí mật riêng cho các endpoint vận hành, cố ý không dùng token của sinh viên.
+    # /metrics và /stats báo cáo chi phí vận hành của dịch vụ - số token, số tiền USD đã tiêu, số
+    # lần guardrail chặn - vốn là việc của người vận hành chứ không phải của ai khác. Một sinh viên
+    # đăng nhập được thì không vì thế mà đọc được hóa đơn.
     metrics_token: str
     # The credit ceiling depends on how the student is doing, not on who is asking. A student
     # on academic warning is held to a lower ceiling so they can concentrate on fewer courses.
-    # Tran tin chi phu thuoc vao ket qua hoc tap cua sinh vien, khong phu thuoc vao viec ai
-    # dang hoi. Sinh vien bi canh bao hoc vu chiu tran thap hon de tap trung vao it mon hon.
+    # Trần tín chỉ phụ thuộc vào kết quả học tập của sinh viên, không phụ thuộc vào việc ai
+    # đang hỏi. Sinh viên bị cảnh báo học vụ chịu trần thấp hơn để tập trung vào ít môn hơn.
     max_credits_by_status: dict[str, int]
 
     def max_credits_for(self, academic_status: str) -> int:
         """The credit ceiling for a student in this academic standing.
 
-        Tran tin chi ap dung cho sinh vien dang o tinh trang hoc vu nay.
+        Trần tín chỉ áp dụng cho sinh viên đang ở tình trạng học vụ này.
 
         An unknown status falls back to the strictest ceiling rather than the most generous
         one: if the data is not understood, the safe reading is the restrictive one.
-        Mot tinh trang la khong nhan ra duoc thi lay tran chat nhat chu khong lay tran rong
-        nhat: khi khong hieu du lieu, cach doc an toan la cach doc han che.
+        Một tình trạng lạ không nhận ra được thì lấy trần chặt nhất chứ không lấy trần rộng
+        nhất: khi không hiểu dữ liệu, cách đọc an toàn là cách đọc hạn chế.
         """
         if academic_status in self.max_credits_by_status:
             return self.max_credits_by_status[academic_status]
@@ -149,7 +153,7 @@ def load_settings() -> Settings:
 def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
     """Estimate the USD cost of one model call.
 
-    Uoc tinh chi phi (USD) cua mot lan goi model.
+    Ước tính chi phí (USD) của một lần gọi model.
     """
     price = PRICE_PER_1M_TOKENS.get(model)
     if price is None:

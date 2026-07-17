@@ -1,6 +1,6 @@
 """PostgreSQL connection pool.
 
-Quan ly ket noi toi PostgreSQL bang connection pool.
+Quản lý kết nối tới PostgreSQL bằng connection pool.
 """
 
 from collections.abc import Iterator
@@ -17,7 +17,7 @@ _pool: ConnectionPool | None = None
 def get_pool() -> ConnectionPool:
     """Return the process-wide connection pool, creating it on first use.
 
-    Tra ve connection pool dung chung, khoi tao o lan goi dau tien.
+    Trả về connection pool dùng chung, khởi tạo ở lần gọi đầu tiên.
     """
     global _pool
     if _pool is None:
@@ -26,6 +26,8 @@ def get_pool() -> ConnectionPool:
             conninfo=settings.database_url,
             min_size=1,
             max_size=8,
+            # dict_row: every query returns rows as dicts (row["column"]) instead of tuples.
+            # dict_row: mọi truy vấn trả về dòng dạng dict (row["column"]) thay vì tuple.
             kwargs={"row_factory": dict_row},
             open=True,
         )
@@ -36,11 +38,11 @@ def get_pool() -> ConnectionPool:
 def get_connection() -> Iterator:
     """Borrow a connection from the pool for the duration of a `with` block.
 
-    Muon mot ket noi tu pool trong suot mot khoi `with`, tra lai pool khi ra khoi khoi.
+    Mượn một kết nối từ pool trong suốt một khối `with`, trả lại pool khi ra khỏi khối.
 
-    Dung nhu context manager: `with get_connection() as conn:`. Khi ra khoi khoi `with`,
-    ket noi khong bi dong ma duoc TRA VE pool de lan sau dung lai (mo ket noi moi rat ton
-    kem). psycopg cung tu dong commit neu khoi ket thuc binh thuong, hoac rollback neu co loi.
+    Dùng như context manager: `with get_connection() as conn:`. Khi ra khỏi khối `with`,
+    kết nối không bị đóng mà được TRẢ VỀ pool để lần sau dùng lại (mở kết nối mới rất tốn
+    kém). psycopg cũng tự động commit nếu khối kết thúc bình thường, hoặc rollback nếu có lỗi.
     """
     with get_pool().connection() as conn:
         yield conn
@@ -49,8 +51,8 @@ def get_connection() -> Iterator:
 def close_pool() -> None:
     """Close the whole pool. Call once at shutdown, not per request.
 
-    Dong toan bo pool. Chi goi mot lan luc tat dich vu (xem lifespan trong main.py), khong
-    goi sau moi request. Dat _pool ve None de lan get_pool() sau se dung len mot pool moi.
+    Đóng toàn bộ pool. Chỉ gọi một lần lúc tắt dịch vụ (xem lifespan trong main.py), không
+    gọi sau mỗi request. Đặt _pool về None để lần get_pool() sau sẽ dựng lên một pool mới.
     """
     global _pool
     if _pool is not None:

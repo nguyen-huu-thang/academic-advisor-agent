@@ -1,17 +1,17 @@
 """Refresh token rotation, reuse detection, and revocation.
 
-Xoay vong refresh token, phat hien tai su dung, va thu hoi.
+Xoay vòng refresh token, phát hiện tái sử dụng, và thu hồi.
 
 These need a real PostgreSQL, and that is not an accident of implementation. Being revocable
 means having state somewhere, and state is the one thing a pure function cannot have. The rest of
 the auth layer - passwords, JWTs, the lockout counter - is pure and needs no database; this is
 where that stops, and it stops here for a reason worth being able to say out loud.
-Cac bai test nay can PostgreSQL that, va do khong phai la mot tinh co trong cach cai dat. Thu hoi
-duoc nghia la phai co trang thai o dau do, ma trang thai lai dung la thu mot ham thuan khong the
-co. Phan con lai cua tang xac thuc - mat khau, JWT, bo dem khoa tai khoan - deu thuan va khong can
-database; den day thi dieu do dung lai, va no dung lai vi mot ly do dang duoc noi thanh loi.
+Các bài test này cần PostgreSQL thật, và đó không phải là một tình cờ trong cách cài đặt. Thu hồi
+được nghĩa là phải có trạng thái ở đâu đó, mà trạng thái lại đúng là thứ một hàm thuần không thể
+có. Phần còn lại của tầng xác thực - mật khẩu, JWT, bộ đếm khóa tài khoản - đều thuần và không cần
+database; đến đây thì điều đó dừng lại, và nó dừng lại vì một lý do đáng được nói thành lời.
 
-Chay: pytest tests/test_refresh_token.py -v
+Chạy: pytest tests/test_refresh_token.py -v
 """
 
 import threading
@@ -83,14 +83,14 @@ def _row(database_url: str, raw_token: str) -> dict | None:
         ).fetchone()
 
 
-# Cai duoc luu la ban bam, khong phai token
+# Cái được lưu là bản băm, không phải token
 # What is stored is the hash, not the token
 
 
 def test_the_token_itself_is_never_written_to_the_database(database_url, settings, students):
     """If the table leaked, the rows in it still could not be presented as tokens.
 
-    Neu bang bi lo, cac dong trong do van khong the dem trinh ra nhu mot token.
+    Nếu bảng bị lộ, các dòng trong đó vẫn không thể đem trình ra như một token.
     """
     raw = issue_for_new_login(STUDENT, settings)
 
@@ -103,7 +103,7 @@ def test_the_token_itself_is_never_written_to_the_database(database_url, setting
     assert _row(database_url, raw) is not None
 
 
-# Xoay vong
+# Xoay vòng
 # Rotation
 
 
@@ -121,7 +121,7 @@ def test_rotation_returns_a_new_token_and_kills_the_old_one(database_url, settin
 def test_the_whole_chain_stays_in_one_family(database_url, settings, students):
     """Rotation does not start a new family, or a revocation later would miss the earlier tokens.
 
-    Xoay vong khong mo mot ho moi, neu khong thi mot lenh thu hoi sau nay se bo sot cac token cu.
+    Xoay vòng không mở một họ mới, nếu không thì một lệnh thu hồi sau này sẽ bỏ sót các token cũ.
     """
     first = issue_for_new_login(STUDENT, settings)
     second = rotate(first, settings).refresh_token
@@ -135,7 +135,7 @@ def test_the_whole_chain_stays_in_one_family(database_url, settings, students):
 def test_each_login_starts_its_own_family(database_url, settings, students):
     """Signing in on a phone must not disturb the laptop, nor be revoked along with it.
 
-    Dang nhap tren dien thoai khong duoc lam phien may tinh, va cung khong bi thu hoi theo.
+    Đăng nhập trên điện thoại không được làm phiền máy tính, và cũng không bị thu hồi theo.
     """
     laptop = issue_for_new_login(STUDENT, settings)
     phone = issue_for_new_login(STUDENT, settings)
@@ -148,39 +148,39 @@ def test_each_login_starts_its_own_family(database_url, settings, students):
     assert _row(database_url, phone)["status"] == "active"
 
 
-# Phat hien tai su dung
+# Phát hiện tái sử dụng
 # Reuse detection
 
 
 def test_reusing_a_spent_token_revokes_the_entire_family(database_url, settings, students):
     """The heart of it. A token that was already spent turns up again, so the family dies.
 
-    Trai tim cua ca thiet ke. Mot token da tieu roi lai xuat hien, nen ca ho phai chet.
+    Trái tim của cả thiết kế. Một token đã tiêu rồi lại xuất hiện, nên cả họ phải chết.
 
     Either a thief copied that token and is spending it behind the student's back, or the student
     is retrying a request whose reply never arrived - and from here there is no way to tell the
     two apart. So assume the worse one: if it was a thief, the family must die or the thief keeps
     the session. If it was an honest retry, the student is logged out and signs in again, which is
     an annoyance. An annoyance is recoverable; a live session in someone else's hands is not.
-    Hoac mot ke trom da sao chep token do va dang tieu no sau lung sinh vien, hoac sinh vien dang
-    gui lai mot request ma cau tra loi khong bao gio toi noi - va tu day khong co cach nao phan
-    biet duoc. Nen cu gia dinh truong hop xau hon: neu la ke trom, ca ho phai chet, khong thi ke
-    trom giu duoc phien. Neu la mot lan gui lai ngay tinh, sinh vien bi dang xuat va dang nhap lai,
-    do la mot su phien toai. Phien toai thi khac phuc duoc; mot phien dang song trong tay nguoi
-    khac thi khong.
+    Hoặc một kẻ trộm đã sao chép token đó và đang tiêu nó sau lưng sinh viên, hoặc sinh viên đang
+    gửi lại một request mà câu trả lời không bao giờ tới nơi - và từ đây không có cách nào phân
+    biệt được. Nên cứ giả định trường hợp xấu hơn: nếu là kẻ trộm, cả họ phải chết, không thì kẻ
+    trộm giữ được phiên. Nếu là một lần gửi lại ngay tình, sinh viên bị đăng xuất và đăng nhập lại,
+    đó là một sự phiền toái. Phiền toái thì khắc phục được; một phiên đang sống trong tay người
+    khác thì không.
     """
     stolen = issue_for_new_login(STUDENT, settings)
     current = rotate(stolen, settings).refresh_token
 
     # The thief spends the copy they took before the rotation.
-    # Ke trom tieu ban sao ma ho da lay truoc luc xoay vong.
+    # Kẻ trộm tiêu bản sao mà họ đã lấy trước lúc xoay vòng.
     with pytest.raises(RefreshTokenReused):
         rotate(stolen, settings)
 
     # And the token the student is legitimately holding is dead too. That is the point: the
     # service cannot tell which of the two is the thief, so it refuses to keep serving either.
-    # Va token ma sinh vien dang cam mot cach chinh dang cung chet theo. Do chinh la muc dich: dich
-    # vu khong biet ai trong hai nguoi la ke trom, nen no tu choi phuc vu tiep ca hai.
+    # Và token mà sinh viên đang cầm một cách chính đáng cũng chết theo. Đó chính là mục đích: dịch
+    # vụ không biết ai trong hai người là kẻ trộm, nên nó từ chối phục vụ tiếp cả hai.
     assert _row(database_url, current)["status"] == "revoked"
 
     with pytest.raises(InvalidRefreshToken):
@@ -190,7 +190,7 @@ def test_reusing_a_spent_token_revokes_the_entire_family(database_url, settings,
 def test_reuse_of_one_family_does_not_touch_another(database_url, settings, students):
     """Revocation must stop at the family boundary, or one bad tab logs you out everywhere.
 
-    Viec thu hoi phai dung lai o ranh gioi cua ho, neu khong thi mot tab hong se dang xuat het.
+    Việc thu hồi phải dừng lại ở ranh giới của họ, nếu không thì một tab hỏng sẽ đăng xuất hết.
     """
     compromised = issue_for_new_login(STUDENT, settings)
     rotate(compromised, settings)
@@ -208,7 +208,7 @@ def test_reuse_of_one_family_does_not_touch_another(database_url, settings, stud
 def test_an_unknown_token_is_refused_but_raises_no_alarm(settings, students):
     """A token nobody has ever seen is noise. A token that was spent is an alarm. Different things.
 
-    Mot token chua ai tung thay la nhieu. Mot token da bi tieu la bao dong. Hai chuyen khac nhau.
+    Một token chưa ai từng thấy là nhiễu. Một token đã bị tiêu là báo động. Hai chuyện khác nhau.
     """
     with pytest.raises(InvalidRefreshToken) as caught:
         rotate("khong-phai-token-cua-ai-ca", settings)
@@ -216,7 +216,7 @@ def test_an_unknown_token_is_refused_but_raises_no_alarm(settings, students):
     assert not isinstance(caught.value, RefreshTokenReused)
 
 
-# Dang xuat
+# Đăng xuất
 # Logout
 
 
@@ -224,8 +224,8 @@ def test_logout_revokes_the_family_not_just_the_token_in_hand(database_url, sett
     """Killing only the token presented would leave its parent alive, and a thief holding the
     parent could carry on refreshing as if nothing had happened.
 
-    Neu chi giet token duoc trinh ra thi token cha van song, va mot ke trom dang giu token cha do
-    van cu the ma refresh tiep nhu chua he co chuyen gi.
+    Nếu chỉ giết token được trình ra thì token cha vẫn sống, và một kẻ trộm đang giữ token cha đó
+    vẫn cứ thế mà refresh tiếp như chưa hề có chuyện gì.
     """
     first = issue_for_new_login(STUDENT, settings)
     second = rotate(first, settings).refresh_token
@@ -239,21 +239,21 @@ def test_logout_revokes_the_family_not_just_the_token_in_hand(database_url, sett
         rotate(second, settings)
 
 
-# Tranh chap dong thoi
+# Tranh chấp đồng thời
 # Concurrency
 
 
 def test_two_refreshes_racing_with_one_token_cannot_both_win(database_url, settings, students):
     """Twenty threads present the same token at the same instant. Exactly one may be served.
 
-    Hai muoi luong cung trinh ra mot token trong cung mot khoanh khac. Dung mot luong duoc phuc vu.
+    Hai mươi luồng cùng trình ra một token trong cùng một khoảnh khắc. Đúng một luồng được phục vụ.
 
     Without the claim being done by the UPDATE itself - the same trick the registration slip uses
     - two threads could both read the row as active and both mint a successor, leaving two live
     refresh tokens where the design allows exactly one.
-    Neu viec gianh token khong duoc thuc hien bang chinh cau UPDATE - dung meo ma phieu dang ky
-    dang dung - thi hai luong deu co the doc thay dong o trang thai active va deu sinh ra mot token
-    ke tiep, de lai hai refresh token con song trong khi thiet ke chi cho phep dung mot.
+    Nếu việc giành token không được thực hiện bằng chính câu UPDATE - đúng mẹo mà phiếu đăng ký
+    đang dùng - thì hai luồng đều có thể đọc thấy dòng ở trạng thái active và đều sinh ra một token
+    kế tiếp, để lại hai refresh token còn sống trong khi thiết kế chỉ cho phép đúng một.
     """
     contenders = 20
     token = issue_for_new_login(STUDENT, settings)
@@ -288,7 +288,7 @@ def test_two_refreshes_racing_with_one_token_cannot_both_win(database_url, setti
     )
 
     # Every loser must come back through a designed path, not through a raw database error.
-    # Moi luong thua deu phai quay ve qua mot duong da thiet ke, khong phai qua mot loi database tho.
+    # Mọi luồng thua đều phải quay về qua một đường đã thiết kế, không phải qua một lỗi database thô.
     assert outcomes.count("thanh_cong") + outcomes.count("phat_hien_dung_lai") + outcomes.count(
         "bi_tu_choi"
     ) == contenders
@@ -302,14 +302,14 @@ def test_two_refreshes_racing_with_one_token_cannot_both_win(database_url, setti
     # reply gets logged out and signs back in. Neither is a breach. Letting a replayed token
     # through would be.
     #
-    # Va he qua trung thuc, noi ra chu khong giau: cac luong thua trong y het mot lan dung lai duoi
-    # con mat cua dich vu, boi tu ben trong dich vu thi chung dung la nhu vay. Ca ho bi thu hoi, va
-    # luong duy nhat "thang" dang cam mot token da chet.
+    # Và hệ quả trung thực, nói ra chứ không giấu: các luồng thua trông y hệt một lần dùng lại dưới
+    # con mắt của dịch vụ, bởi từ bên trong dịch vụ thì chúng đúng là như vậy. Cả họ bị thu hồi, và
+    # luồng duy nhất "thắng" đang cầm một token đã chết.
     #
-    # Day la cai gia cua viec phat hien tai su dung mot cach nghiem ngat, va do la cai gia dung nen
-    # tra. Mot client ban hai muoi lenh refresh cung luc la mot client hong; mot client gui lai mot
-    # lan sau khi mat cau tra loi thi bi dang xuat va dang nhap lai. Ca hai deu khong phai la mot vu
-    # xam nhap. Con de lot mot token bi dung lai thi moi la.
+    # Đây là cái giá của việc phát hiện tái sử dụng một cách nghiêm ngặt, và đó là cái giá đúng nên
+    # trả. Một client bắn hai mươi lệnh refresh cùng lúc là một client hỏng; một client gửi lại một
+    # lần sau khi mất câu trả lời thì bị đăng xuất và đăng nhập lại. Cả hai đều không phải là một vụ
+    # xâm nhập. Còn để lọt một token bị dùng lại thì mới là.
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         alive = conn.execute(
             "SELECT count(*) AS n FROM refresh_tokens WHERE student_id = %s AND status = 'active'",

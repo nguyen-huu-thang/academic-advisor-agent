@@ -1,25 +1,25 @@
 """Measure how often the retriever actually finds the right passage.
 
-Do xem bo tim kiem thuc su lay dung doan tai lieu bao nhieu phan tram.
+Đo xem bộ tìm kiếm thực sự lấy đúng đoạn tài liệu bao nhiêu phần trăm.
 
 "The service has RAG" says nothing about whether the retrieval works. A pipeline that returns
 the wrong passage still produces a fluent, confident, wrong answer - and the citation at the
 bottom makes it look more trustworthy, not less. So the retriever is scored against a set of
 questions whose correct passage is known in advance.
-Cau "dich vu co RAG" khong noi len duoc gi ve chuyen tim kiem co chay dung hay khong. Mot pipeline
-lay ve sai doan van thi van sinh ra mot cau tra loi tron tru, tu tin, va sai - ma dong trich nguon
-o cuoi con lam no trong dang tin hon chu khong phai kem tin di. Vi vay bo tim kiem duoc cham diem
-tren mot bo cau hoi da biet truoc doan van dung.
+Câu "dịch vụ có RAG" không nói lên được gì về chuyện tìm kiếm có chạy đúng hay không. Một pipeline
+lấy về sai đoạn văn thì vẫn sinh ra một câu trả lời trơn tru, tự tin, và sai - mà dòng trích nguồn
+ở cuối còn làm nó trông đáng tin hơn chứ không phải kém tin đi. Vì vậy bộ tìm kiếm được chấm điểm
+trên một bộ câu hỏi đã biết trước đoạn văn đúng.
 
 Two numbers are reported:
 
-  Recall@k  - phan tram cau hoi co doan dung nam trong top k ket qua. Neu doan dung khong lot
-              vao top k thi no khong bao gio den duoc tay model, va model chi con cach doan.
+  Recall@k  - phần trăm câu hỏi có đoạn đúng nằm trong top k kết quả. Nếu đoạn đúng không lọt
+              vào top k thì nó không bao giờ đến được tay model, và model chỉ còn cách đoán.
 
-  MRR       - trung binh cua 1/thu hang cua doan dung. No phan biet "doan dung dung dau bang"
-              voi "doan dung nam thu tu", dieu ma Recall@k khong phan biet duoc.
+  MRR       - trung bình của 1/thứ hạng của đoạn đúng. Nó phân biệt "đoạn đúng đứng đầu bảng"
+              với "đoạn đúng nằm thứ tư", điều mà Recall@k không phân biệt được.
 
-Chay: python -m scripts.eval_rag
+Chạy: python -m scripts.eval_rag
 """
 
 from app.config import load_settings
@@ -27,13 +27,13 @@ from app.db import close_pool
 from app.llm.gemini import GeminiClient
 from app.rag.retriever import Retriever
 
-# (cau hoi, tieu de muc chua cau tra loi)
+# (câu hỏi, tiêu đề mục chứa câu trả lời)
 # The heading is what identifies the passage: the chunker splits on headings, so each chunk
 # begins with the "## ..." line of the section it came from.
-# Tieu de muc chinh la thu dinh danh doan van: bo cat doan cat theo tieu de, nen moi doan deu bat
-# dau bang dong "## ..." cua muc ma no duoc cat ra.
+# Tiêu đề mục chính là thứ định danh đoạn văn: bộ cắt đoạn cắt theo tiêu đề, nên mỗi đoạn đều bắt
+# đầu bằng dòng "## ..." của mục mà nó được cắt ra.
 GOLD: list[tuple[str, str]] = [
-    # Quy che dao tao
+    # Quy chế đào tạo
     ("Dieu kien de duoc xet tot nghiep la gi?", "Dieu kien xet tot nghiep"),
     ("Em can bao nhieu tin chi thi duoc ra truong?", "Dieu kien xet tot nghiep"),
     ("Con mon nao bi diem F thi co tot nghiep duoc khong?", "Dieu kien xet tot nghiep"),
@@ -58,7 +58,7 @@ GOLD: list[tuple[str, str]] = [
     ("Truot mon thi co phai hoc lai khong?", "Hoc lai va hoc cai thien"),
     ("Hoc cai thien thi lay diem lan nao?", "Hoc lai va hoc cai thien"),
     ("Tot nghiep loai gioi can GPA bao nhieu?", "Xep loai tot nghiep"),
-    # Chuong trinh dao tao
+    # Chương trình đào tạo
     ("Mon Tri tue nhan tao co nhung mon tien quyet nao?", "Bang tong hop hoc phan tien quyet"),
     ("Muon hoc Hoc may thi phai dat nhung mon nao truoc?", "Bang tong hop hoc phan tien quyet"),
     ("Mon Co so du lieu yeu cau hoc phan tien quyet gi?", "Bang tong hop hoc phan tien quyet"),
@@ -66,7 +66,7 @@ GOLD: list[tuple[str, str]] = [
     ("Mon Cau truc du lieu va giai thuat co bao nhieu tin chi?", "Khoi kien thuc co so nganh"),
     ("Giai tich 1 bao nhieu tin chi?", "Khoi kien thuc toan va khoa hoc co ban"),
     ("Nhung mon nao thuoc khoi tu chon cua nganh?", "Khoi kien thuc chuyen nganh tu chon"),
-    # Huong dan dang ky hoc phan
+    # Hướng dẫn đăng ký học phần
     ("Quy trinh dang ky mot lop hoc phan gom may buoc?", "Quy trinh dang ky mot lop hoc phan"),
     ("Phieu dang ky co hieu luc trong bao lau?", "Quy trinh dang ky mot lop hoc phan"),
     ("Nhung truong hop nao thi bi tu choi dang ky?", "Cac truong hop dang ky bi tu choi"),
@@ -82,7 +82,7 @@ TOP_K = 4
 def chunk_heading(content: str) -> str:
     """The heading a chunk came from, read off its first line.
 
-    Tieu de muc ma mot doan van duoc cat ra, doc tu chinh dong dau tien cua no.
+    Tiêu đề mục mà một đoạn văn được cắt ra, đọc từ chính dòng đầu tiên của nó.
     """
     first_line = content.strip().splitlines()[0] if content.strip() else ""
     return first_line.lstrip("#").strip()
@@ -91,7 +91,7 @@ def chunk_heading(content: str) -> str:
 def normalise(text: str) -> str:
     """Strip Vietnamese diacritics so a question written without them still matches.
 
-    Bo dau tieng Viet de mot cau hoi go khong dau van doi chieu duoc voi tieu de co dau.
+    Bỏ dấu tiếng Việt để một câu hỏi gõ không dấu vẫn đối chiếu được với tiêu đề có dấu.
     """
     pairs = (
         ("aăâáàảãạắằẳẵặấầẩẫậ", "a"),
@@ -130,6 +130,7 @@ def main() -> None:
         headings = [normalise(chunk_heading(r.content)) for r in results]
         wanted = normalise(expected)
 
+        # Thứ hạng (1-based) của đoạn đúng trong danh sách kết quả, None nếu không lọt top k.
         rank = next((i + 1 for i, heading in enumerate(headings) if heading == wanted), None)
 
         if rank == 1:

@@ -1,6 +1,6 @@
-"""Tests for splitting bank documents into retrievable chunks.
+"""Tests for splitting documents into retrievable chunks.
 
-Kiem thu viec cat tai lieu ngan hang thanh cac doan de tim kiem.
+Kiểm thử việc cắt tài liệu thành các đoạn để tìm kiếm.
 """
 
 from app.rag.chunker import chunk_markdown
@@ -19,7 +19,7 @@ def test_splits_on_headings():
 def test_each_chunk_keeps_its_heading():
     """A chunk without its heading loses the context that makes it findable.
 
-    Mot doan bi cat mat tieu de se mat luon ngu canh giup no duoc tim thay.
+    Một đoạn bị cắt mất tiêu đề sẽ mất luôn ngữ cảnh giúp nó được tìm thấy.
     """
     text = "## Phi chuyen tien\n\nMien phi hoan toan.\n\n## Phi the\n\n66.000 VND mot nam.\n"
     chunks = chunk_markdown(text)

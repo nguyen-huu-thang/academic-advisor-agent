@@ -1,6 +1,6 @@
 """Refresh tokens: rotation, reuse detection, and revocation.
 
-Refresh token: xoay vong, phat hien tai su dung, va thu hoi.
+Refresh token: xoay vòng, phát hiện tái sử dụng, và thu hồi.
 
 Two tokens, two opposite trades, both deliberate.
 
@@ -14,17 +14,17 @@ The refresh token lives for weeks, so it must be revocable, and a thing can only
 somewhere a row says it is still valid. It is presented once every fifteen minutes rather than on
 every request, so that lookup costs nothing that matters.
 
-Hai loai token, hai danh doi nguoc nhau, ca hai deu co chu dich.
+Hai loại token, hai đánh đổi ngược nhau, cả hai đều có chủ đích.
 
-Access token la mot JWT khong duoc luu o dau ca. No chi duoc kiem tra bang chu ky, nen phuc vu
-mot request khong ton mot vong goi database nao. Cai gia phai tra la khong the rut no lai truoc
-han - va do chinh la ly do no chi duoc cho song muoi lam phut. Mot sinh vien da bi thu hoi quyen
-van dung duoc nhieu nhat la muoi lam phut do, va cai cua so co gioi han ay chinh la toan bo cai
-gia cua viec khong cham vao database o duong di nong nhat.
+Access token là một JWT không được lưu ở đâu cả. Nó chỉ được kiểm tra bằng chữ ký, nên phục vụ
+một request không tốn một vòng gọi database nào. Cái giá phải trả là không thể rút nó lại trước
+hạn - và đó chính là lý do nó chỉ được cho sống mười lăm phút. Một sinh viên đã bị thu hồi quyền
+vẫn dùng được nhiều nhất là mười lăm phút đó, và cái cửa sổ có giới hạn ấy chính là toàn bộ cái
+giá của việc không chạm vào database ở đường đi nóng nhất.
 
-Refresh token thi song hang tuan, nen bat buoc phai thu hoi duoc, ma mot thu chi thu hoi duoc khi
-o dau do co mot dong ghi rang no van con hieu luc. No lai chi duoc trinh ra muoi lam phut mot lan
-chu khong phai moi request mot lan, nen phep tra cuu do khong ton gi dang ke.
+Refresh token thì sống hàng tuần, nên bắt buộc phải thu hồi được, mà một thứ chỉ thu hồi được khi
+ở đâu đó có một dòng ghi rằng nó vẫn còn hiệu lực. Nó lại chỉ được trình ra mười lăm phút một lần
+chứ không phải mỗi request một lần, nên phép tra cứu đó không tốn gì đáng kể.
 """
 
 import hashlib
@@ -37,8 +37,8 @@ from app.db import get_connection
 
 # 256 bits of randomness. This is the number that makes the design work: a token this size cannot
 # be guessed, which is why it needs no slow hash and no salt.
-# 256 bit ngau nhien. Chinh con so nay lam cho ca thiet ke chay duoc: mot token lon nhu vay thi
-# khong doan ra duoc, va do la ly do no khong can ham bam cham va khong can salt.
+# 256 bit ngẫu nhiên. Chính con số này làm cho cả thiết kế chạy được: một token lớn như vậy thì
+# không đoán ra được, và đó là lý do nó không cần hàm băm chậm và không cần salt.
 TOKEN_BYTES = 32
 
 STATUS_ACTIVE = "active"
@@ -49,21 +49,21 @@ STATUS_REVOKED = "revoked"
 class InvalidRefreshToken(Exception):
     """The refresh token is unknown, expired, already used, or revoked.
 
-    Refresh token khong ton tai, da het han, da dung roi, hoac da bi thu hoi.
+    Refresh token không tồn tại, đã hết hạn, đã dùng rồi, hoặc đã bị thu hồi.
     """
 
 
 class RefreshTokenReused(InvalidRefreshToken):
     """A token that had already been rotated was presented again.
 
-    Mot token da duoc xoay vong roi lai duoc trinh ra lan nua.
+    Một token đã được xoay vòng rồi lại được trình ra lần nữa.
 
     Raised separately from a plain invalid token because it means something different, and calls
     for something different: an unknown token is noise, this is an alarm. By the time it is
     raised, the whole family has already been revoked.
-    Duoc nem ra rieng khoi mot token khong hop le thong thuong, boi no co nghia khac han, va doi
-    hoi mot phan ung khac: mot token la thi chi la nhieu, con day la mot bao dong. Den luc no duoc
-    nem ra thi ca ho token da bi thu hoi roi.
+    Được ném ra riêng khỏi một token không hợp lệ thông thường, bởi nó có nghĩa khác hẳn, và đòi
+    hỏi một phản ứng khác: một token lạ thì chỉ là nhiễu, còn đây là một báo động. Đến lúc nó được
+    ném ra thì cả họ token đã bị thu hồi rồi.
     """
 
 
@@ -76,7 +76,7 @@ class RotatedTokens:
 def hash_token(raw_token: str) -> str:
     """The value actually stored. The token itself never reaches the database.
 
-    Gia tri thuc su duoc luu. Ban than token khong bao gio di toi database.
+    Giá trị thực sự được lưu. Bản thân token không bao giờ đi tới database.
 
     A single SHA-256, not scrypt, and that is a decision rather than an omission. scrypt is slow
     on purpose because a password is short and guessable, and every guess must be made to hurt. A
@@ -87,14 +87,14 @@ def hash_token(raw_token: str) -> str:
     to the service as tokens. Making a stolen table useless and making a stolen token hard to
     guess are two different jobs, and only the first one is needed here.
 
-    Mot lan SHA-256, khong phai scrypt, va do la mot quyet dinh chu khong phai mot thieu sot.
-    scrypt co y cham vi mat khau thi ngan va doan duoc, nen phai lam cho moi lan doan deu dau don.
-    Refresh token la 256 bit ngau nhien, nen khong ai doan no ca; mot ham bam cham chang mua duoc
-    gi ma con dat mot khoang cho len moi lan refresh.
+    Một lần SHA-256, không phải scrypt, và đó là một quyết định chứ không phải một thiếu sót.
+    scrypt cố ý chậm vì mật khẩu thì ngắn và đoán được, nên phải làm cho mỗi lần đoán đều đau đớn.
+    Refresh token là 256 bit ngẫu nhiên, nên không ai đoán nó cả; một hàm băm chậm chẳng mua được
+    gì mà còn đặt một khoảng chờ lên mỗi lần refresh.
 
-    Cong dung cua ban bam nay hep hon nhieu: neu bang bi danh cap, cac dong trong do khong the dem
-    trinh cho dich vu nhu mot token. Lam mot cai bang bi cap tro nen vo dung, va lam mot cai token
-    bi cap tro nen kho doan, la hai viec khac nhau, va o day chi can viec thu nhat.
+    Công dụng của bản băm này hẹp hơn nhiều: nếu bảng bị đánh cắp, các dòng trong đó không thể đem
+    trình cho dịch vụ như một token. Làm một cái bảng bị cắp trở nên vô dụng, và làm một cái token
+    bị cắp trở nên khó đoán, là hai việc khác nhau, và ở đây chỉ cần việc thứ nhất.
     """
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
@@ -102,12 +102,12 @@ def hash_token(raw_token: str) -> str:
 def issue_for_new_login(student_id: str, settings: Settings) -> str:
     """Start a fresh family for a student who has just proved their password.
 
-    Mo mot ho token moi cho sinh vien vua chung minh dung mat khau.
+    Mở một họ token mới cho sinh viên vừa chứng minh đúng mật khẩu.
 
     Each login starts its own family, so signing in on a phone does not disturb the session on a
     laptop, and revoking one does not revoke the other.
-    Moi lan dang nhap mo mot ho rieng, nen dang nhap tren dien thoai khong lam phien phien lam viec
-    tren may tinh, va thu hoi cai nay khong thu hoi cai kia.
+    Mỗi lần đăng nhập mở một họ riêng, nên đăng nhập trên điện thoại không làm phiền phiên làm việc
+    trên máy tính, và thu hồi cái này không thu hồi cái kia.
     """
     with get_connection() as conn:
         return _mint(conn, student_id, uuid.uuid4().hex, settings)
@@ -116,14 +116,14 @@ def issue_for_new_login(student_id: str, settings: Settings) -> str:
 def rotate(raw_token: str, settings: Settings) -> RotatedTokens:
     """Spend a refresh token and hand back its replacement.
 
-    Tieu mot refresh token va tra ve token thay the no.
+    Tiêu một refresh token và trả về token thay thế nó.
 
     The old token is dead the moment this succeeds. That is the point of rotation: a refresh
     token stolen from the wire is only good until its rightful owner next uses theirs, instead of
     being good for the next fortnight.
-    Token cu chet ngay khi ham nay thanh cong. Do chinh la muc dich cua viec xoay vong: mot refresh
-    token bi danh cap tren duong truyen chi con gia tri cho toi lan tiep theo chu that su cua no
-    dung token cua ho, thay vi con gia tri suot hai tuan toi.
+    Token cũ chết ngay khi hàm này thành công. Đó chính là mục đích của việc xoay vòng: một refresh
+    token bị đánh cắp trên đường truyền chỉ còn giá trị cho tới lần tiếp theo chủ thật sự của nó
+    dùng token của họ, thay vì còn giá trị suốt hai tuần tới.
     """
     token_hash = hash_token(raw_token)
 
@@ -132,10 +132,10 @@ def rotate(raw_token: str, settings: Settings) -> RotatedTokens:
         # is claimed. Two refreshes racing with the same token cannot both win: the second one
         # updates no row, and falls through to _reject below - where being unable to claim an
         # already-rotated token is precisely how a replay is caught.
-        # Gianh lay token bang chinh cau UPDATE dang kiem tra no, y het cach mot phieu dang ky duoc
-        # gianh. Hai lan refresh chay dua voi cung mot token khong the cung thang: cau thu hai
-        # khong cap nhat duoc dong nao, va roi xuong _reject ben duoi - noi ma viec khong gianh
-        # duoc mot token da bi xoay vong chinh la cach mot lan dung lai bi bat.
+        # Giành lấy token bằng chính câu UPDATE đang kiểm tra nó, y hệt cách một phiếu đăng ký được
+        # giành. Hai lần refresh chạy đua với cùng một token không thể cùng thắng: câu thứ hai
+        # không cập nhật được dòng nào, và rơi xuống _reject bên dưới - nơi mà việc không giành
+        # được một token đã bị xoay vòng chính là cách một lần dùng lại bị bắt.
         claimed = conn.execute(
             f"""
             UPDATE refresh_tokens
@@ -150,9 +150,9 @@ def rotate(raw_token: str, settings: Settings) -> RotatedTokens:
             # Written and committed inside this block, then raised outside it. Raising here would
             # roll the revocation back, and the family would survive the very alarm that was
             # supposed to kill it.
-            # Duoc ghi va commit ben trong khoi nay, roi moi nem ra ben ngoai. Neu nem ngay tai day
-            # thi viec thu hoi se bi cuon nguoc lai, va ca ho token se song sot qua dung cai bao
-            # dong le ra phai giet no.
+            # Được ghi và commit bên trong khối này, rồi mới ném ra bên ngoài. Nếu ném ngay tại đây
+            # thì việc thu hồi sẽ bị cuốn ngược lại, và cả họ token sẽ sống sót qua đúng cái báo
+            # động lẽ ra phải giết nó.
             failure = _reject(conn, token_hash)
         else:
             failure = None
@@ -169,14 +169,14 @@ def rotate(raw_token: str, settings: Settings) -> RotatedTokens:
 def revoke_family_of(raw_token: str) -> None:
     """Log out: kill the token presented, and every token descended from the same login.
 
-    Dang xuat: giet token duoc trinh ra, va moi token sinh ra tu cung lan dang nhap do.
+    Đăng xuất: giết token được trình ra, và mọi token sinh ra từ cùng lần đăng nhập đó.
 
     Revoking the family rather than the single row is what makes logout mean anything. Killing
     only the token in hand would leave its parent - already rotated, but still sitting in the
     table - and a thief holding that parent could carry on refreshing.
-    Thu hoi ca ho thay vi chi mot dong la thu lam cho viec dang xuat co y nghia. Neu chi giet token
-    dang cam tren tay thi token cha cua no - da bi xoay vong, nhung van con nam trong bang - se
-    song sot, va mot ke trom dang giu token cha do van cu the ma refresh tiep.
+    Thu hồi cả họ thay vì chỉ một dòng là thứ làm cho việc đăng xuất có ý nghĩa. Nếu chỉ giết token
+    đang cầm trên tay thì token cha của nó - đã bị xoay vòng, nhưng vẫn còn nằm trong bảng - sẽ
+    sống sót, và một kẻ trộm đang giữ token cha đó vẫn cứ thế mà refresh tiếp.
     """
     with get_connection() as conn:
         row = conn.execute(
@@ -186,8 +186,8 @@ def revoke_family_of(raw_token: str) -> None:
         if row is None:
             # Logging out with a token nobody has ever seen is not an error worth reporting: it
             # leaves the caller logged out either way, which is what they asked for.
-            # Dang xuat bang mot token chua ai tung thay khong phai la loi dang bao: du sao nguoi
-            # goi cung ket thuc o trang thai da dang xuat, dung nhu ho muon.
+            # Đăng xuất bằng một token chưa ai từng thấy không phải là lỗi đáng báo: dù sao người
+            # gọi cũng kết thúc ở trạng thái đã đăng xuất, đúng như họ muốn.
             return
         _revoke_family(conn, row["family_id"])
 
@@ -195,13 +195,13 @@ def revoke_family_of(raw_token: str) -> None:
 def _mint(conn, student_id: str, family_id: str, settings: Settings) -> str:
     """Create one new refresh token row and return the raw token to hand to the client.
 
-    Tao mot dong refresh token moi va tra ve token GOC de dua cho client.
+    Tạo một dòng refresh token mới và trả về token GỐC để đưa cho client.
 
-    Sinh token ngau nhien (256 bit), luu vao bang chi phan bam (hash_token) chu khong luu
-    token goc - neu bang bi lo thi cac dong trong do khong the dem trinh nhu token. Han dung
-    do PostgreSQL tinh: now() + so_ngay * interval '1 day'. family_id gan token nay vao dung
-    ho token cua lan dang nhap: token cap luc dang nhap dung uuid moi, token xoay vong dung
-    lai family_id cua token cu (xem rotate) de ca chuoi cung mot ho.
+    Sinh token ngẫu nhiên (256 bit), lưu vào bảng chỉ phần băm (hash_token) chứ không lưu
+    token gốc - nếu bảng bị lộ thì các dòng trong đó không thể đem trình như token. Hạn dùng
+    do PostgreSQL tính: now() + so_ngay * interval '1 day'. family_id gắn token này vào đúng
+    họ token của lần đăng nhập: token cấp lúc đăng nhập dùng uuid mới, token xoay vòng dùng
+    lại family_id của token cũ (xem rotate) để cả chuỗi cùng một họ.
     """
     raw_token = secrets.token_urlsafe(TOKEN_BYTES)
     conn.execute(
@@ -217,7 +217,7 @@ def _mint(conn, student_id: str, family_id: str, settings: Settings) -> str:
 def _reject(conn, token_hash: str) -> InvalidRefreshToken:
     """Work out why the token could not be claimed, and revoke the family if it was a replay.
 
-    Tim ra vi sao token khong gianh duoc, va thu hoi ca ho neu do la mot lan dung lai.
+    Tìm ra vì sao token không giành được, và thu hồi cả họ nếu đó là một lần dùng lại.
     """
     row = conn.execute(
         """
@@ -240,14 +240,14 @@ def _reject(conn, token_hash: str) -> InvalidRefreshToken:
         # which is an annoyance and not a breach. An annoyance is recoverable; a live session in
         # someone else's hands is not.
         #
-        # Bao dong. Token nay da bi tieu roi, vay ma no lai xuat hien. Hoac mot ke trom da sao chep
-        # no va dang tieu no sau lung sinh vien, hoac sinh vien dang gui lai mot request ma cau tra
-        # loi khong bao gio toi noi - va tu day thi khong co cach nao phan biet duoc hai truong hop.
+        # Báo động. Token này đã bị tiêu rồi, vậy mà nó lại xuất hiện. Hoặc một kẻ trộm đã sao chép
+        # nó và đang tiêu nó sau lưng sinh viên, hoặc sinh viên đang gửi lại một request mà câu trả
+        # lời không bao giờ tới nơi - và từ đây thì không có cách nào phân biệt được hai trường hợp.
         #
-        # Nen cu gia dinh truong hop xau hon. Neu la ke trom, ca ho phai chet, khong thi ke trom
-        # giu duoc phien. Neu la mot lan gui lai ngay tinh, sinh vien bi dang xuat va phai dang nhap
-        # lai, do la mot su phien toai chu khong phai mot vu xam nhap. Phien toai thi khac phuc duoc;
-        # mot phien dang song trong tay nguoi khac thi khong.
+        # Nên cứ giả định trường hợp xấu hơn. Nếu là kẻ trộm, cả họ phải chết, không thì kẻ trộm
+        # giữ được phiên. Nếu là một lần gửi lại ngay tình, sinh viên bị đăng xuất và phải đăng nhập
+        # lại, đó là một sự phiền toái chứ không phải một vụ xâm nhập. Phiền toái thì khắc phục được;
+        # một phiên đang sống trong tay người khác thì không.
         _revoke_family(conn, row["family_id"])
         return RefreshTokenReused(
             "Refresh token nay da duoc su dung roi. Vi ly do an toan, toan bo phien dang nhap "
@@ -266,13 +266,13 @@ def _reject(conn, token_hash: str) -> InvalidRefreshToken:
 def _revoke_family(conn, family_id: str) -> None:
     """Mark every still-live token in a family as revoked, in one statement.
 
-    Danh dau moi token con song trong mot ho la da thu hoi, chi bang mot cau lenh.
+    Đánh dấu mọi token còn sống trong một họ là đã thu hồi, chỉ bằng một câu lệnh.
 
-    Dung khi dang xuat, hoac khi phat hien tai su dung token. Cap nhat tat ca dong cung
-    family_id (tru nhung dong da revoked san de khong ghi de vo ich). Sau cau lenh nay, moi
-    token thuoc lan dang nhap do - ke ca token dang duoc cam chinh dang - deu khong dung duoc
-    nua. STATUS_REVOKED va cac hang khac duoc noi truc tiep vao chuoi SQL vi chung la hang so
-    trong code, khong phai du lieu tu nguoi dung, nen khong co rui ro SQL injection.
+    Dùng khi đăng xuất, hoặc khi phát hiện tái sử dụng token. Cập nhật tất cả dòng cùng
+    family_id (trừ những dòng đã revoked sẵn để không ghi đè vô ích). Sau câu lệnh này, mọi
+    token thuộc lần đăng nhập đó - kể cả token đang được cầm chính đáng - đều không dùng được
+    nữa. STATUS_REVOKED và các hằng khác được nối trực tiếp vào chuỗi SQL vì chúng là hằng số
+    trong code, không phải dữ liệu từ người dùng, nên không có rủi ro SQL injection.
     """
     conn.execute(
         f"""
@@ -286,7 +286,7 @@ def _revoke_family(conn, family_id: str) -> None:
 def _prune_expired(conn, student_id: str) -> None:
     """Drop this student's rows that have expired. They protect nothing any more.
 
-    Xoa cac dong da het han cua sinh vien nay. Chung khong con bao ve dieu gi nua.
+    Xóa các dòng đã hết hạn của sinh viên này. Chúng không còn bảo vệ điều gì nữa.
 
     Rotated rows must be kept while they are alive, because they are what turns a replayed token
     into a recognised replay. Once expired, a replay of them would be refused for being expired
@@ -295,12 +295,12 @@ def _prune_expired(conn, student_id: str) -> None:
     Without this the table would grow one row per refresh for ever: a student refreshing every
     fifteen minutes for a year is thirty-five thousand rows that nothing will ever read.
 
-    Cac dong rotated phai duoc giu trong khi chung con song, boi chinh chung bien mot token bi dung
-    lai thanh mot lan dung lai bi nhan ra. Khi da het han thi mot lan dung lai cung se bi tu choi vi
-    het han roi, nen dong do khong con lam duoc viec gi nua.
+    Các dòng rotated phải được giữ trong khi chúng còn sống, bởi chính chúng biến một token bị dùng
+    lại thành một lần dùng lại bị nhận ra. Khi đã hết hạn thì một lần dùng lại cũng sẽ bị từ chối vì
+    hết hạn rồi, nên dòng đó không còn làm được việc gì nữa.
 
-    Neu khong co buoc nay, bang se phinh them mot dong sau moi lan refresh, mai mai: mot sinh vien
-    cu muoi lam phut refresh mot lan trong mot nam la ba muoi lam nghin dong ma khong ai doc toi.
+    Nếu không có bước này, bảng sẽ phình thêm một dòng sau mỗi lần refresh, mãi mãi: một sinh viên
+    cứ mười lăm phút refresh một lần trong một năm là ba mươi lăm nghìn dòng mà không ai đọc tới.
     """
     conn.execute(
         "DELETE FROM refresh_tokens WHERE student_id = %s AND expires_at <= now()",

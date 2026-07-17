@@ -1,13 +1,13 @@
 """Tests for the rules that decide what the agent is allowed to do.
 
-Kiem thu cac quy tac quyet dinh agent duoc phep lam gi.
+Kiểm thử các quy tắc quyết định agent được phép làm gì.
 
 These are the tests that matter most: anything else in the service can be wrong and fixed
 later, but a student who ends up enrolled in a class they may not take has to be taken back
 out by a human.
-Day la nhung bai test quan trong nhat: moi thu khac trong dich vu co sai thi sua sau cung
-duoc, nhung mot sinh vien bi ghi danh vao lop khong duoc phep hoc thi phai co nguoi that vao
-go ra.
+Đây là những bài test quan trọng nhất: mọi thứ khác trong dịch vụ có sai thì sửa sau cũng
+được, nhưng một sinh viên bị ghi danh vào lớp không được phép học thì phải có người thật vào
+gỡ ra.
 """
 
 from app.agent.guardrail import (
@@ -114,7 +114,7 @@ def make_context(
 
 
 # Reading tools
-# Cac tool chi doc
+# Các tool chỉ đọc
 
 
 def test_public_tool_runs_unconditionally():
@@ -127,8 +127,8 @@ def test_public_tool_runs_unconditionally():
 def test_reading_own_record_needs_no_permission():
     # These tools take no student id, so there is no field for the model to put someone
     # else's id into. They read the student from the TurnContext.
-    # Cac tool nay khong nhan tham so ma sinh vien, nen model khong co o trong nao de dien ma
-    # cua nguoi khac vao. Chung doc sinh vien tu TurnContext.
+    # Các tool này không nhận tham số mã sinh viên, nên model không có ô trống nào để điền mã
+    # của người khác vào. Chúng đọc sinh viên từ TurnContext.
     assert check_tool_call("tra_cuu_bang_diem", {}, make_context()).allowed
     assert check_tool_call("tra_cuu_tien_do_hoc_tap", {}, make_context()).allowed
 
@@ -140,7 +140,7 @@ def test_unknown_tool_is_refused():
 
 
 # Preparing a registration
-# Chuan bi mot lenh dang ky
+# Chuẩn bị một lệnh đăng ký
 
 
 def test_registration_allowed_when_every_rule_is_satisfied():
@@ -181,8 +181,8 @@ def test_registering_the_same_course_twice_is_refused():
 def test_missing_prerequisite_is_refused_and_named():
     # The student has passed data structures but failed discrete maths, so exactly one
     # prerequisite is missing and the refusal must say which.
-    # Sinh vien da dat Cau truc du lieu nhung truot Toan roi rac, nen thieu dung mot mon tien
-    # quyet, va loi tu choi phai noi ro thieu mon nao.
+    # Sinh viên đã đạt Cấu trúc dữ liệu nhưng trượt Toán rời rạc, nên thiếu đúng một môn tiên
+    # quyết, và lời từ chối phải nói rõ thiếu môn nào.
     context = make_context(passed_courses=frozenset({"INT2010"}))
     decision = check_tool_call("dang_ky_hoc_phan", {"ma_lop": 1}, context)
     assert not decision.allowed
@@ -194,8 +194,8 @@ def test_missing_prerequisite_is_refused_and_named():
 def test_prerequisite_check_ignores_what_the_model_claims():
     # The model can be talked into asserting the student is eligible. It makes no difference:
     # these arguments are never read, only the grade table is.
-    # Model hoan toan co the bi noi khich de tu khang dinh sinh vien du dieu kien. Dieu do
-    # khong thay doi gi: cac tham so nay khong bao gio duoc doc, chi bang diem duoc doc.
+    # Model hoàn toàn có thể bị nói khích để tự khẳng định sinh viên đủ điều kiện. Điều đó
+    # không thay đổi gì: các tham số này không bao giờ được đọc, chỉ bảng điểm được đọc.
     context = make_context(passed_courses=frozenset())
     decision = check_tool_call(
         "dang_ky_hoc_phan",
@@ -209,8 +209,8 @@ def test_prerequisite_check_ignores_what_the_model_claims():
 def test_credit_ceiling_is_enforced():
     # A student on academic warning has a ceiling of 18. She sits at 17 credits, so one more
     # 3-credit course would take her to 20.
-    # Sinh vien bi canh bao hoc vu co tran 18 tin. Em dang o 17 tin chi, nen them mot mon 3 tin
-    # nua se len 20.
+    # Sinh viên bị cảnh báo học vụ có trần 18 tín. Em đang ở 17 tín chỉ, nên thêm một môn 3 tín
+    # nữa sẽ lên 20.
     registered = (
         make_registered(course_code="MAT1042", credits=4, day_of_week=2, start_period=4, end_period=6),
         make_registered(course_code="MAT1104", credits=3, day_of_week=6, start_period=7, end_period=9),
@@ -228,8 +228,8 @@ def test_credit_ceiling_is_enforced():
 def test_landing_exactly_on_the_ceiling_is_allowed():
     # 21 credits already registered plus a 3-credit course is exactly 24: on the ceiling, not
     # over it. An off-by-one here would refuse a registration the regulation permits.
-    # 21 tin da dang ky cong mot mon 3 tin la dung 24: bang tran chu khong vuot tran. Mot loi
-    # lech mot don vi o day se tu choi mot lenh dang ky ma quy che cho phep.
+    # 21 tín đã đăng ký cộng một môn 3 tín là đúng 24: bằng trần chứ không vượt trần. Một lỗi
+    # lệch một đơn vị ở đây sẽ từ chối một lệnh đăng ký mà quy chế cho phép.
     registered = (
         make_registered(course_code="INT2207", credits=21, day_of_week=7, start_period=1, end_period=3),
     )
@@ -240,8 +240,8 @@ def test_landing_exactly_on_the_ceiling_is_allowed():
 def test_timetable_clash_is_refused():
     # Target is Tuesday periods 1-3; the registered class is Tuesday periods 2-4, so they
     # share periods 2 and 3.
-    # Lop dang xet hoc thu 3 tiet 1-3; lop da dang ky hoc thu 3 tiet 2-4, nen hai lop trung
-    # tiet 2 va tiet 3.
+    # Lớp đang xét học thứ 3 tiết 1-3; lớp đã đăng ký học thứ 3 tiết 2-4, nên hai lớp trùng
+    # tiết 2 và tiết 3.
     registered = (make_registered(course_code="INT3405", day_of_week=3, start_period=2, end_period=4),)
     decision = check_tool_call(
         "dang_ky_hoc_phan", {"ma_lop": 1}, make_context(registered=registered)
@@ -254,16 +254,16 @@ def test_clash_message_names_both_timetables():
     # The refusal is read out to the student by the model, so an ambiguous one becomes a wrong
     # answer. Mentioning a single time slot right after the other course's name reads as if it
     # were that course's slot, and the model duly repeats the mix-up.
-    # Loi tu choi se duoc model doc lai cho sinh vien nghe, nen mot cau mo ho se bien thanh mot
-    # cau tra loi sai. Neu chi neu mot khung gio ngay sau ten mon kia, cau van doc ra thanh
-    # khung gio cua mon do, va model se lap lai y nguyen su nham lan ay.
+    # Lời từ chối sẽ được model đọc lại cho sinh viên nghe, nên một câu mơ hồ sẽ biến thành một
+    # câu trả lời sai. Nếu chỉ nêu một khung giờ ngay sau tên môn kia, câu văn đọc ra thành
+    # khung giờ của môn đó, và model sẽ lặp lại y nguyên sự nhầm lẫn ấy.
     registered = (make_registered(course_code="INT2207", day_of_week=3, start_period=2, end_period=4),)
     decision = check_tool_call(
         "dang_ky_hoc_phan", {"ma_lop": 1}, make_context(registered=registered)
     )
     assert not decision.allowed
     # The class being asked for: Tuesday 1-3. The class already registered: Tuesday 2-4.
-    # Lop dang xin dang ky: thu 3 tiet 1-3. Lop da dang ky: thu 3 tiet 2-4.
+    # Lớp đang xin đăng ký: thứ 3 tiết 1-3. Lớp đã đăng ký: thứ 3 tiết 2-4.
     assert "tiet 1-3" in decision.note
     assert "tiet 2-4" in decision.note
 
@@ -271,8 +271,8 @@ def test_clash_message_names_both_timetables():
 def test_touching_a_single_period_is_already_a_clash():
     # Target Tuesday 1-3, registered Tuesday 3-5: they overlap on period 3 alone, and that is
     # enough. This is the boundary the overlap test has to get right.
-    # Lop dang xet thu 3 tiet 1-3, lop da dang ky thu 3 tiet 3-5: chung chi giao nhau dung tiet
-    # 3, va the la du. Day chinh la ranh gioi ma phep kiem tra giao nhau phai bat dung.
+    # Lớp đang xét thứ 3 tiết 1-3, lớp đã đăng ký thứ 3 tiết 3-5: chúng chỉ giao nhau đúng tiết
+    # 3, và thế là đủ. Đây chính là ranh giới mà phép kiểm tra giao nhau phải bắt đúng.
     registered = (make_registered(course_code="INT3405", day_of_week=3, start_period=3, end_period=5),)
     decision = check_tool_call(
         "dang_ky_hoc_phan", {"ma_lop": 1}, make_context(registered=registered)
@@ -283,8 +283,8 @@ def test_touching_a_single_period_is_already_a_clash():
 
 def test_same_weekday_without_overlapping_periods_is_fine():
     # Target Tuesday 1-3, registered Tuesday 4-6: same day, no shared period, no clash.
-    # Lop dang xet thu 3 tiet 1-3, lop da dang ky thu 3 tiet 4-6: cung thu, khong chung tiet
-    # nao, khong trung lich.
+    # Lớp đang xét thứ 3 tiết 1-3, lớp đã đăng ký thứ 3 tiết 4-6: cùng thứ, không chung tiết
+    # nào, không trùng lịch.
     registered = (make_registered(course_code="INT3405", day_of_week=3, start_period=4, end_period=6),)
     assert check_tool_call(
         "dang_ky_hoc_phan", {"ma_lop": 1}, make_context(registered=registered)
@@ -299,7 +299,7 @@ def test_full_class_is_refused():
 
 
 # Confirming a registration
-# Xac nhan mot lenh dang ky
+# Xác nhận một lệnh đăng ký
 
 
 def test_confirming_without_a_slip_is_refused():
@@ -339,9 +339,9 @@ def test_confirming_in_the_same_turn_that_created_the_slip_is_refused():
     # The rule that makes consent real. The model can prepare a registration and then, in the
     # same breath, decide the student agreed. But it cannot send a message on the student's
     # behalf, and a slip created this turn can only be confirmed by a later one.
-    # Quy tac bien su dong y thanh that. Model co the tao lenh dang ky roi ngay trong cung mot
-    # hoi tu ket luan rang sinh vien da dong y. Nhung no khong the gui tin nhan thay sinh vien,
-    # va mot phieu tao ra trong luot nay chi co the duoc xac nhan boi mot luot sau do.
+    # Quy tắc biến sự đồng ý thành thật. Model có thể tạo lệnh đăng ký rồi ngay trong cùng một
+    # hơi tự kết luận rằng sinh viên đã đồng ý. Nhưng nó không thể gửi tin nhắn thay sinh viên,
+    # và một phiếu tạo ra trong lượt này chỉ có thể được xác nhận bởi một lượt sau đó.
     context = make_context(pending=make_pending(created_turn_id=TURN_NOW))
     decision = check_tool_call("xac_nhan_dang_ky", {"ma_phieu": "DK1A2B"}, context)
     assert not decision.allowed
@@ -358,10 +358,10 @@ def test_rules_are_rechecked_at_confirmation_time():
     # registered for another class and is now over the ceiling, so the confirmation must fail
     # even though the slip itself is in order. Checking only at preparation time would let two
     # slips prepared side by side both be confirmed and take the student past the limit.
-    # Phieu nay hop le luc duoc ghi ra. Nhung giua luot do va luot nay, sinh vien da dang ky
-    # them mot lop khac va gio dang vuot tran, nen lenh xac nhan phai that bai du ban than phieu
-    # khong co van de gi. Neu chi kiem tra o buoc chuan bi, hai phieu duoc chuan bi song song se
-    # deu duoc xac nhan va day sinh vien vuot qua gioi han.
+    # Phiếu này hợp lệ lúc được ghi ra. Nhưng giữa lượt đó và lượt này, sinh viên đã đăng ký
+    # thêm một lớp khác và giờ đang vượt trần, nên lệnh xác nhận phải thất bại dù bản thân phiếu
+    # không có vấn đề gì. Nếu chỉ kiểm tra ở bước chuẩn bị, hai phiếu được chuẩn bị song song sẽ
+    # đều được xác nhận và đẩy sinh viên vượt quá giới hạn.
     registered = (
         make_registered(course_code="INT3306", credits=22, day_of_week=7, start_period=1, end_period=3),
     )
@@ -377,7 +377,7 @@ def test_rules_are_rechecked_at_confirmation_time():
 
 def test_confirming_into_a_class_that_filled_up_meanwhile_is_refused():
     # The class had room when the slip was written and is full by the time it is confirmed.
-    # Luc ghi phieu thi lop con cho, den luc xac nhan thi lop da day.
+    # Lúc ghi phiếu thì lớp còn chỗ, đến lúc xác nhận thì lớp đã đầy.
     context = make_context(
         target=make_section(capacity=50, enrolled=50),
         pending=make_pending(created_turn_id=TURN_EARLIER),
@@ -388,7 +388,7 @@ def test_confirming_into_a_class_that_filled_up_meanwhile_is_refused():
 
 
 # Masking
-# Che thong tin
+# Che thông tin
 
 
 def test_student_id_is_masked_to_the_last_four_characters():

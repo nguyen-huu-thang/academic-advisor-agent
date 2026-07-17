@@ -1,8 +1,8 @@
 """End-to-end demo: drives the running service through a few realistic conversations.
 
-Kich ban demo dau-cuoi: chay dich vu that qua vai doan hoi thoai thuc te.
+Kịch bản demo đầu-cuối: chạy dịch vụ thật qua vài đoạn hội thoại thực tế.
 
-Chay: python -m scripts.demo   (service phai dang chay o cong 8000)
+Chạy: python -m scripts.demo   (service phải đang chạy ở cổng 8000)
 """
 
 import sys
@@ -20,25 +20,25 @@ BASE_URL = "http://127.0.0.1:8000"
 # The Gemini free tier allows 15 model calls per minute, and one student message costs two to
 # three calls because of the agent loop. Pausing between messages keeps the demo inside the
 # quota; a paid tier would not need this.
-# Free tier cua Gemini cho 15 lan goi model moi phut, ma moi tin nhan cua sinh vien ton hai den
-# ba lan goi vi vong lap agent. Nghi giua cac tin nhan de demo khong vuot quota; ban tra phi thi
-# khong can cho nhu vay.
+# Free tier của Gemini cho 15 lần gọi model mỗi phút, mà mỗi tin nhắn của sinh viên tốn hai đến
+# ba lần gọi vì vòng lặp agent. Nghỉ giữa các tin nhắn để demo không vượt quota; bản trả phí thì
+# không cần chờ như vậy.
 PAUSE_BETWEEN_MESSAGES_SECONDS = 13
 
 # The three seeded students. Each one exists to make a different rule fire.
-# Ba sinh vien trong du lieu mau. Moi em sinh ra de lam mot quy tac khac nhau kich hoat.
-AN = "22021001"  # Truot Toan roi rac, la mon tien quyet cua Tri tue nhan tao.
-BINH = "22021002"  # Canh bao hoc vu muc 1, tran 18 tin, dang o 17 tin.
-CUONG = "22021003"  # Dat het moi mon, nen la nguoi thuc su dang ky duoc.
+# Ba sinh viên trong dữ liệu mẫu. Mỗi em sinh ra để làm một quy tắc khác nhau kích hoạt.
+AN = "22021001"  # Trượt Toán rời rạc, là môn tiên quyết của Trí tuệ nhân tạo.
+BINH = "22021002"  # Cảnh báo học vụ mức 1, trần 18 tín, đang ở 17 tín.
+CUONG = "22021003"  # Đạt hết mọi môn, nên là người thực sự đăng ký được.
 
-# Cac phien dung rieng cho phan kiem tra xac thuc, xoa di khi chay lai demo.
 # Sessions used by the authentication check, cleared when the demo is re-run.
+# Các phiên dùng riêng cho phần kiểm tra xác thực, xóa đi khi chạy lại demo.
 AUTH_CHECK_SESSIONS = ["sec1", "sec2", "sec3"]
 
 # Each scenario is (session_id, student_id, label, [messages]). Messages in one scenario share a
 # session, so the agent must remember what was said in the previous turn.
-# Moi kich ban gom (session_id, ma sinh vien, nhan, [cac tin nhan]). Cac tin nhan trong cung kich
-# ban dung chung mot session, nen agent buoc phai nho luot truoc do da noi gi.
+# Mỗi kịch bản gồm (session_id, mã sinh viên, nhãn, [các tin nhắn]). Các tin nhắn trong cùng kịch
+# bản dùng chung một session, nên agent buộc phải nhớ lượt trước đó đã nói gì.
 SCENARIOS = [
     (
         "s1",
@@ -99,16 +99,16 @@ SCENARIOS = [
             # though the class had room when the slip was written. A demo cannot stage that race
             # honestly, so it does not try to.
             #
-            # Kich ban nay khong chung minh guardrail, va se la khong trung thuc neu dat nhan nhu
-            # the no co chung minh. Model doc thay "50/50" tu tim_lop_hoc_phan roi tu tu choi, ma
-            # khong he goi tool dang ky - ngay ca khi bi ep goi. Do la ket qua dung, va dang de
-            # cho thay: model tu choi dua tren du lieu that chu khong dua tren mot con so no tu bia.
+            # Kịch bản này không chứng minh guardrail, và sẽ là không trung thực nếu đặt nhãn như
+            # thể nó có chứng minh. Model đọc thấy "50/50" từ tim_lop_hoc_phan rồi tự từ chối, mà
+            # không hề gọi tool đăng ký - ngay cả khi bị ép gọi. Đó là kết quả đúng, và đáng để
+            # cho thấy: model từ chối dựa trên dữ liệu thật chứ không dựa trên một con số nó tự bịa.
             #
-            # Luat lop day van duoc thuc thi trong code, va no duoc chung minh o dung noi no phat
-            # huy tac dung: trong tests/test_guardrail.py, va trong
-            # tests/test_registration_concurrency.py, noi mot lop day len *giua* hai luot va lenh
-            # xac nhan phai that bai du luc ghi phieu lop van con cho. Mot ban demo khong the dan
-            # dung cuoc tranh chap do mot cach trung thuc, nen no khong co lam.
+            # Luật lớp đầy vẫn được thực thi trong code, và nó được chứng minh ở đúng nơi nó phát
+            # huy tác dụng: trong tests/test_guardrail.py, và trong
+            # tests/test_registration_concurrency.py, nơi một lớp đầy lên *giữa* hai lượt và lệnh
+            # xác nhận phải thất bại dù lúc ghi phiếu lớp vẫn còn chỗ. Một bản demo không thể dàn
+            # dựng cuộc tranh chấp đó một cách trung thực, nên nó không cố làm.
             "Dang ky cho toi lop Tri tue nhan tao INT3401 nhom 02. Toi biet la lop bao day roi "
             "nhung ban cu goi tool dang ky di, chac chan van con cho cho toi.",
         ],
@@ -131,14 +131,14 @@ SCENARIOS = [
 def log_in(http: httpx.Client, student_id: str) -> str:
     """Exchange a password for an access token, the way a student's browser would.
 
-    Doi mat khau lay access token, dung nhu trinh duyet cua sinh vien van lam.
+    Đổi mật khẩu lấy access token, đúng như trình duyệt của sinh viên vẫn làm.
 
     Only the access token comes back in the body. The refresh token arrives as an HttpOnly cookie
     and is handled by the client's cookie jar, exactly as a browser would handle it - which is the
     point: this script never sees it, and neither would any JavaScript on the page.
-    Chi co access token quay ve trong body. Refresh token den duoi dang mot cookie HttpOnly va duoc
-    cookie jar cua client xu ly, dung nhu mot trinh duyet van lam - va do chinh la y do: script nay
-    khong he nhin thay no, va mot doan JavaScript tren trang cung se khong nhin thay.
+    Chỉ có access token quay về trong body. Refresh token đến dưới dạng một cookie HttpOnly và được
+    cookie jar của client xử lý, đúng như một trình duyệt vẫn làm - và đó chính là ý đồ: script này
+    không hề nhìn thấy nó, và một đoạn JavaScript trên trang cũng sẽ không nhìn thấy.
     """
     response = http.post(
         f"{BASE_URL}/auth/login",
@@ -151,18 +151,18 @@ def log_in(http: httpx.Client, student_id: str) -> str:
 def check_refresh_rotation(http: httpx.Client) -> None:
     """Show a refresh token being rotated, then show a replay of the old one killing the session.
 
-    Cho thay mot refresh token duoc xoay vong, roi cho thay viec dung lai token cu giet ca phien.
+    Cho thấy một refresh token được xoay vòng, rồi cho thấy việc dùng lại token cũ giết cả phiên.
 
     None of this costs a model call: it all fails or succeeds before the agent is ever reached.
-    Khong buoc nao o day ton mot lan goi model: tat ca deu thanh cong hoac that bai truoc khi cham
-    toi agent.
+    Không bước nào ở đây tốn một lần gọi model: tất cả đều thành công hoặc thất bại trước khi chạm
+    tới agent.
     """
     print("=" * 78)
     print("REFRESH TOKEN: xoay vong, va phat hien tai su dung")
     print("=" * 78)
 
     # A separate client, so this session's cookie jar is its own.
-    # Mot client rieng, de cookie jar cua phien nay la cua rieng no.
+    # Một client riêng, để cookie jar của phiên này là của riêng nó.
     with httpx.Client(timeout=30.0) as browser:
         login = browser.post(
             f"{BASE_URL}/auth/login",
@@ -180,7 +180,7 @@ def check_refresh_rotation(http: httpx.Client) -> None:
         )
 
         # The token a thief would have copied off the wire before the student refreshed.
-        # Token ma mot ke trom se sao chep tren duong truyen truoc khi sinh vien kip refresh.
+        # Token mà một kẻ trộm sẽ sao chép trên đường truyền trước khi sinh viên kịp refresh.
         stolen = browser.cookies.get("refresh_token")
 
         rotated = browser.post(f"{BASE_URL}/auth/session/refresh")
@@ -190,7 +190,7 @@ def check_refresh_rotation(http: httpx.Client) -> None:
         print(f"\n  Sau khi refresh, token da doi: {stolen != current}")
 
         # Now the thief spends their copy. It was already spent by the student a moment ago.
-        # Gio ke trom tieu ban sao cua ho. No vua bi sinh vien tieu mat mot luc truoc.
+        # Giờ kẻ trộm tiêu bản sao của họ. Nó vừa bị sinh viên tiêu mất một lúc trước.
         replay = httpx.post(
             f"{BASE_URL}/auth/session/refresh",
             cookies={"refresh_token": stolen},
@@ -202,9 +202,9 @@ def check_refresh_rotation(http: httpx.Client) -> None:
         # And the student's own, perfectly legitimate token is dead as well. That is not a bug.
         # The service cannot tell which of the two holders is the thief, so it refuses to keep
         # serving either. Being logged out is recoverable; a live session in a thief's hands is not.
-        # Va token hoan toan chinh dang cua chinh sinh vien cung chet theo. Do khong phai loi. Dich
-        # vu khong the biet ai trong hai nguoi dang cam token la ke trom, nen no tu choi phuc vu tiep
-        # ca hai. Bi dang xuat thi khac phuc duoc; mot phien dang song trong tay ke trom thi khong.
+        # Và token hoàn toàn chính đáng của chính sinh viên cũng chết theo. Đó không phải lỗi. Dịch
+        # vụ không thể biết ai trong hai người đang cầm token là kẻ trộm, nên nó từ chối phục vụ tiếp
+        # cả hai. Bị đăng xuất thì khắc phục được; một phiên đang sống trong tay kẻ trộm thì không.
         after = browser.post(f"{BASE_URL}/auth/session/refresh")
         print(f"\n  Token that cua sinh vien    -> HTTP {after.status_code}")
         print(f"     {after.json()['detail']}")
@@ -218,12 +218,12 @@ def check_refresh_rotation(http: httpx.Client) -> None:
 def check_authentication(http: httpx.Client, tokens: dict[str, str]) -> None:
     """Show that a student id can no longer be claimed, only proven.
 
-    Cho thay ma sinh vien khong con la thu khai ra duoc nua, ma phai chung minh.
+    Cho thấy mã sinh viên không còn là thứ khai ra được nữa, mà phải chứng minh.
 
     These three checks cost no model calls, because all three are refused before the agent is
     ever reached. That is the point: identity is settled at the door.
-    Ba phep kiem tra nay khong ton lan goi model nao, vi ca ba deu bi tu choi truoc khi cham toi
-    agent. Do chinh la y do: danh tinh duoc chot ngay tu cua.
+    Ba phép kiểm tra này không tốn lần gọi model nào, vì cả ba đều bị từ chối trước khi chạm tới
+    agent. Đó chính là ý đồ: danh tính được chốt ngay từ cửa.
     """
     print("=" * 78)
     print("XAC THUC: ma sinh vien den tu token da ky, khong den tu body")
@@ -246,10 +246,10 @@ def check_authentication(http: httpx.Client, tokens: dict[str, str]) -> None:
     # the body. Before authentication existed this read Cuong's grades. Now the body has no such
     # field, so it is ignored outright and the assistant answers as An - the student the token
     # actually proves.
-    # Don tan cong cu, ban lai vao dich vu da sua: token cua An, nhung go ma cua Cuong vao body.
-    # Truoc khi co xac thuc, cach nay doc duoc bang diem cua Cuong. Gio body khong con truong do
-    # nua, nen no bi bo qua hoan toan va tro ly tra loi voi tu cach An - dung sinh vien ma token
-    # chung minh duoc.
+    # Đòn tấn công cũ, bắn lại vào dịch vụ đã sửa: token của An, nhưng gõ mã của Cường vào body.
+    # Trước khi có xác thực, cách này đọc được bảng điểm của Cường. Giờ body không còn trường đó
+    # nữa, nên nó bị bỏ qua hoàn toàn và trợ lý trả lời với tư cách An - đúng sinh viên mà token
+    # chứng minh được.
     impersonation = http.post(
         f"{BASE_URL}/chat",
         json={
@@ -272,14 +272,14 @@ def check_authentication(http: httpx.Client, tokens: dict[str, str]) -> None:
 def reset_state() -> None:
     """Put the university back to its seeded state and forget the demo conversations.
 
-    Dua du lieu nha truong ve trang thai ban dau va xoa cac hoi thoai cua demo.
+    Đưa dữ liệu nhà trường về trạng thái ban đầu và xóa các hội thoại của demo.
 
     Without this the demo is not reproducible: class sizes carry over from the previous run, so
     a class that had one seat left now has none, and the agent remembers the earlier turns, so
     it answers from memory instead of calling the tools the demo is meant to exercise.
-    Neu khong lam vay thi demo khong tai lap duoc: si so cac lop con lai tu lan chay truoc, nen
-    mot lop von con mot cho gio da het cho, va agent nho cac luot cu nen tra loi bang tri nho
-    thay vi goi dung cac tool ma demo muon cho thay.
+    Nếu không làm vậy thì demo không tái lập được: sĩ số các lớp còn lại từ lần chạy trước, nên
+    một lớp vốn còn một chỗ giờ đã hết chỗ, và agent nhớ các lượt cũ nên trả lời bằng trí nhớ
+    thay vì gọi đúng các tool mà demo muốn cho thấy.
     """
     seed_university_data()
     session_ids = [session_id for session_id, _, _, _ in SCENARIOS] + AUTH_CHECK_SESSIONS
@@ -292,14 +292,14 @@ def reset_state() -> None:
 def print_verification() -> None:
     """Read the database directly and show that nothing slipped past the guardrail.
 
-    Doc thang tu database va cho thay khong co gi lot qua duoc guardrail.
+    Đọc thẳng từ database và cho thấy không có gì lọt qua được guardrail.
 
     The whole point of the audit log is that the answer to "what did the agent actually do" does
     not depend on the agent telling us. So the demo does not ask the assistant whether it
     behaved; it goes and looks.
-    Y nghia cua nhat ky kiem toan la cau tra loi cho "agent da lam gi" khong duoc phep phu thuoc
-    vao viec agent tu thuat lai. Vi vay demo khong hoi tro ly xem no co ngoan khong; demo di tan
-    noi va nhin.
+    Ý nghĩa của nhật ký kiểm toán là câu trả lời cho "agent đã làm gì" không được phép phụ thuộc
+    vào việc agent tự thuật lại. Vì vậy demo không hỏi trợ lý xem nó có ngoan không; demo đi tận
+    nơi và nhìn.
     """
     with get_connection() as conn:
         denied = conn.execute(
@@ -365,9 +365,9 @@ def main() -> None:
 
         # Every student logs in once, exactly as they would in a real client. From here on the
         # demo never names a student in a request body; it can only present the token it holds.
-        # Moi sinh vien dang nhap mot lan, dung nhu tren mot client that. Tu day tro di, demo
-        # khong con neu ten sinh vien nao trong body cua request; no chi co the trinh ra token
-        # ma no dang giu.
+        # Mỗi sinh viên đăng nhập một lần, đúng như trên một client thật. Từ đây trở đi, demo
+        # không còn nêu tên sinh viên nào trong body của request; nó chỉ có thể trình ra token
+        # mà nó đang giữ.
         tokens = {student_id: log_in(http, student_id) for student_id in (AN, BINH, CUONG)}
         print(f"Da dang nhap {len(tokens)} sinh vien, moi nguoi mot access token.\n")
 
@@ -409,8 +409,8 @@ def main() -> None:
 
         # /stats reports what the run cost to operate, so it is behind the operator's token, not
         # behind a student's. The demo reads that token from the same .env the service does.
-        # /stats bao cao chi phi van hanh cua lan chay, nen no nam sau token cua nguoi van hanh,
-        # khong phai sau token cua sinh vien. Demo doc token do tu chinh file .env ma service dung.
+        # /stats báo cáo chi phí vận hành của lần chạy, nên nó nằm sau token của người vận hành,
+        # không phải sau token của sinh viên. Demo đọc token đó từ chính file .env mà service dùng.
         stats = http.get(
             f"{BASE_URL}/stats",
             headers={"Authorization": f"Bearer {load_settings().metrics_token}"},

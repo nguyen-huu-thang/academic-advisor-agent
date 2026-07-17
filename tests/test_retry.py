@@ -1,6 +1,6 @@
 """Tests for how the service reacts when Gemini rate limits it.
 
-Kiem thu cach dich vu phan ung khi bi Gemini chan vi qua han muc.
+Kiểm thử cách dịch vụ phản ứng khi bị Gemini chặn vì quá hạn mức.
 """
 
 from app.llm.gemini import MAX_RETRY_DELAY_SECONDS, _backoff_delay, _requested_retry_delay
@@ -9,7 +9,7 @@ from app.llm.gemini import MAX_RETRY_DELAY_SECONDS, _backoff_delay, _requested_r
 class FakeApiError(Exception):
     """Stands in for google.genai.errors.APIError, which is awkward to construct.
 
-    Dong the cho google.genai.errors.APIError, vi lop that rat kho tao ra.
+    Đóng thế cho google.genai.errors.APIError, vì lớp thật rất khó tạo ra.
     """
 
     def __init__(self, message: str, details: list | None = None) -> None:
@@ -45,7 +45,7 @@ def test_backoff_grows_with_each_attempt():
 def test_wait_is_capped_so_a_customer_is_never_left_hanging():
     """Gemini sometimes asks for 51 seconds; an HTTP caller must not wait that long.
 
-    Gemini doi khi yeu cau cho 51 giay; mot nguoi goi qua HTTP khong the doi lau the.
+    Gemini đôi khi yêu cầu chờ 51 giây; một người gọi qua HTTP không thể đợi lâu thế.
     """
     assert _backoff_delay(0, requested=51.0) == MAX_RETRY_DELAY_SECONDS
 

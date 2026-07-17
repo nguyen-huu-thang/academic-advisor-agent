@@ -1,11 +1,11 @@
 """In-process metrics exposed in Prometheus text format.
 
-Cac chi so do trong tien trinh, xuat theo dinh dang text cua Prometheus.
+Các chỉ số đo trong tiến trình, xuất theo định dạng text của Prometheus.
 
 Cost is tracked alongside latency on purpose: for an LLM service the money spent per
 request is an operational signal just as much as how long the request took.
-Chi phi duoc theo doi song song voi do tre la co y: voi mot dich vu LLM, so tien tieu
-cho moi request cung la mot tin hieu van hanh quan trong khong kem thoi gian xu ly.
+Chi phí được theo dõi song song với độ trễ là có ý: với một dịch vụ LLM, số tiền tiêu
+cho mỗi request cũng là một tín hiệu vận hành quan trọng không kém thời gian xử lý.
 """
 
 import threading
@@ -24,21 +24,25 @@ import numpy as np
 # percentile over the last few thousand answers "how is it behaving now", which is the question a
 # latency graph exists for, and it is the one that moves when something breaks.
 #
-# So bao nhieu do tre gan nhat duoc giu lai de tinh phan vi.
+# Số bao nhiêu độ trễ gần nhất được giữ lại để tính phân vị.
 #
-# Truoc day day la mot list khong gioi han, va do la mot cach cham rai de het bo nho: moi request
-# them mot so thuc va khong bao gio bot di, nen mot dich vu chay du lau se giu hang trieu so, con
-# np.percentile thi cham dan theo tung so mot.
+# Trước đây đây là một list không giới hạn, và đó là một cách chậm rãi để hết bộ nhớ: mỗi request
+# thêm một số thực và không bao giờ bớt đi, nên một dịch vụ chạy đủ lâu sẽ giữ hàng triệu số, còn
+# np.percentile thì chậm dần theo từng số một.
 #
-# Mot cua so co gioi han cung la phep do trung thuc hon. Phan vi tinh tren moi request tu luc tien
-# trinh khoi dong tra loi cau "dich vu nay tu truoc toi nay chay ra sao", von khong ai hoi. Phan vi
-# tinh tren vai nghin request gan nhat tra loi cau "no dang chay ra sao", dung cau ma mot bieu do
-# do tre sinh ra de tra loi, va la cau se doi ngay khi co su co.
+# Một cửa sổ có giới hạn cũng là phép đo trung thực hơn. Phân vị tính trên mọi request từ lúc tiến
+# trình khởi động trả lời câu "dịch vụ này từ trước tới nay chạy ra sao", vốn không ai hỏi. Phân vị
+# tính trên vài nghìn request gần nhất trả lời câu "nó đang chạy ra sao", đúng câu mà một biểu đồ
+# độ trễ sinh ra để trả lời, và là câu sẽ đổi ngay khi có sự cố.
 LATENCY_WINDOW = 10_000
 
 
 class Metrics:
     def __init__(self, *, latency_window: int = LATENCY_WINDOW) -> None:
+        # Every counter is guarded by one lock: FastAPI serves requests on many threads,
+        # and unsynchronised `+=` on shared ints would drop updates.
+        # Mọi bộ đếm đều được một khóa bảo vệ: FastAPI phục vụ request trên nhiều luồng,
+        # và phép `+=` không đồng bộ trên số nguyên dùng chung sẽ làm rơi mất cập nhật.
         self._lock = threading.Lock()
         self._latencies_ms: deque[float] = deque(maxlen=latency_window)
         self._requests = 0
@@ -78,16 +82,16 @@ class Metrics:
     def record_refresh_reuse(self) -> None:
         """A refresh token that had already been spent was presented again.
 
-        Mot refresh token da bi tieu roi lai duoc trinh ra lan nua.
+        Một refresh token đã bị tiêu rồi lại được trình ra lần nữa.
 
         This is a security counter, not a performance one, and it should normally read zero. A
         non-zero value means either a token was replayed by someone who should not have it, or a
         client is retrying refreshes badly. Both are worth waking someone up for; neither is
         visible anywhere else.
-        Day la mot bo dem an toan, khong phai hieu nang, va binh thuong no phai bang khong. Mot gia
-        tri khac khong nghia la hoac mot token da bi dung lai boi nguoi le ra khong duoc cam no,
-        hoac mot client dang gui lai lenh refresh sai cach. Ca hai deu dang danh thuc nguoi truc
-        day; va ca hai deu khong nhin thay duoc o bat cu dau khac.
+        Đây là một bộ đếm an toàn, không phải hiệu năng, và bình thường nó phải bằng không. Một giá
+        trị khác không nghĩa là hoặc một token đã bị dùng lại bởi người lẽ ra không được cầm nó,
+        hoặc một client đang gửi lại lệnh refresh sai cách. Cả hai đều đáng đánh thức người trực
+        dậy; và cả hai đều không nhìn thấy được ở bất cứ đâu khác.
         """
         with self._lock:
             self._refresh_reuse += 1

@@ -1,8 +1,8 @@
 """Index the university documents: chunk, embed, and store into PostgreSQL.
 
-Nap tai lieu cua nha truong vao kho tri thuc: cat doan, sinh embedding, luu vao PostgreSQL.
+Nạp tài liệu của nhà trường vào kho tri thức: cắt đoạn, sinh embedding, lưu vào PostgreSQL.
 
-Chay: python -m scripts.ingest
+Chạy: python -m scripts.ingest
 """
 
 import re
@@ -21,7 +21,7 @@ FRONT_MATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 def parse_front_matter(text: str) -> tuple[dict[str, str], str]:
     """Split the YAML-style header from the document body.
 
-    Tach phan tieu de kieu YAML ra khoi noi dung tai lieu.
+    Tách phần tiêu đề kiểu YAML ra khỏi nội dung tài liệu.
     """
     match = FRONT_MATTER_PATTERN.match(text)
     if not match:
@@ -50,8 +50,9 @@ def main() -> None:
     with get_connection() as conn:
         # Reindexing replaces the knowledge base wholesale, so a document edited on disk
         # can never leave a stale copy of itself behind for the retriever to find.
-        # Nap lai se thay the toan bo kho tri thuc, nen mot tai lieu da sua tren dia
-        # khong the de sot lai ban cu cho bo tim kiem doc phai.
+        # Nạp lại sẽ thay thế toàn bộ kho tri thức, nên một tài liệu đã sửa trên đĩa
+        # không thể để sót lại bản cũ cho bộ tìm kiếm đọc phải.
+        # (Xóa documents sẽ kéo theo chunks nhờ ON DELETE CASCADE trong schema.)
         conn.execute("DELETE FROM documents")
 
         for path in files:
@@ -73,6 +74,8 @@ def main() -> None:
             ).fetchone()
             document_id = row["id"]
 
+            # executemany: insert every chunk of this document in one round trip.
+            # executemany: chèn tất cả các đoạn của tài liệu này trong một lượt gọi.
             conn.cursor().executemany(
                 """
                 INSERT INTO chunks (document_id, ordinal, content, embedding)

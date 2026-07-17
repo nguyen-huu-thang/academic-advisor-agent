@@ -1,6 +1,6 @@
 """HTTP API of the academic advisor assistant.
 
-API HTTP cua tro ly co van hoc tap.
+API HTTP của trợ lý cố vấn học tập.
 """
 
 import logging
@@ -37,17 +37,17 @@ router = APIRouter()
 # in localStorage. Anything in localStorage survives a page reload, which sounds convenient until
 # one remembers that it also survives long enough for any injected script to walk off with it.
 #
-# Refresh token di trong mot cookie HttpOnly, con access token di trong body cua cau tra loi. Su
-# tach doi do chinh la muc dich, va moi nua cua no deu dang lam mot viec.
+# Refresh token đi trong một cookie HttpOnly, còn access token đi trong body của câu trả lời. Sự
+# tách đôi đó chính là mục đích, và mỗi nửa của nó đều đang làm một việc.
 #
-# HttpOnly nghia la JavaScript khong doc duoc cookie. Nen mot lo hong XSS - cach pho bien nhat de
-# mot token bi danh cap tren trinh duyet - khong the cham toi cai chung chi song lau kia. Con access
-# token, thu ma script CO the cham toi, thi chi dang gia muoi lam phut chu khong hon.
+# HttpOnly nghĩa là JavaScript không đọc được cookie. Nên một lỗ hổng XSS - cách phổ biến nhất để
+# một token bị đánh cắp trên trình duyệt - không thể chạm tới cái chứng chỉ sống lâu kia. Còn access
+# token, thứ mà script CÓ thể chạm tới, thì chỉ đáng giá mười lăm phút chứ không hơn.
 #
-# Access token di trong body chinh la de frontend giu no trong bo nho chu tuyet doi khong bo vao
-# localStorage. Thu gi nam trong localStorage thi song sot qua mot lan tai lai trang, nghe thi tien,
-# cho toi khi nho ra rang no cung song sot du lau de bat ky doan script nao duoc chen vao cung kip
-# ung dung mang di.
+# Access token đi trong body chính là để frontend giữ nó trong bộ nhớ chứ tuyệt đối không bỏ vào
+# localStorage. Thứ gì nằm trong localStorage thì sống sót qua một lần tải lại trang, nghe thì tiện,
+# cho tới khi nhớ ra rằng nó cũng sống sót đủ lâu để bất kỳ đoạn script nào được chèn vào cũng kịp
+# ung dung mang đi.
 REFRESH_COOKIE_NAME = "refresh_token"
 
 # The cookie is scoped to the exact prefix of the only two endpoints that read it, and nothing
@@ -63,17 +63,17 @@ REFRESH_COOKIE_NAME = "refresh_token"
 # A credential that is never sent is a credential that cannot be leaked by whatever handles the
 # request it was never sent to.
 #
-# Cookie duoc gioi han vao dung tien to cua chi hai endpoint co doc no, va khong gi khac. `Path=/`
-# se dinh kem no vao moi request trinh duyet gui di, ke ca /chat - von la endpoint mang tin nhan
-# cua sinh vien va goi ra mot model cua ben thu ba, tuc la noi cuoi cung ma mot chung chi song hai
-# tuan nen di theo.
+# Cookie được giới hạn vào đúng tiền tố của chỉ hai endpoint có đọc nó, và không gì khác. `Path=/`
+# sẽ đính kèm nó vào mọi request trình duyệt gửi đi, kể cả /chat - vốn là endpoint mang tin nhắn
+# của sinh viên và gọi ra một model của bên thứ ba, tức là nơi cuối cùng mà một chứng chỉ sống hai
+# tuần nên đi theo.
 #
-# Ngay ca `/auth` cung da qua rong, va do la ly do hai endpoint nay duoc dua xuong mot tien to
-# rieng: /auth/login la endpoint duy nhat xu ly mat khau, va no khong dung toi cookie refresh chut
-# nao. Gui cookie toi do thi khong duoc gi ma lai co thu de mat, nen no khong duoc gui toi do.
+# Ngay cả `/auth` cũng đã quá rộng, và đó là lý do hai endpoint này được đưa xuống một tiền tố
+# riêng: /auth/login là endpoint duy nhất xử lý mật khẩu, và nó không dùng tới cookie refresh chút
+# nào. Gửi cookie tới đó thì không được gì mà lại có thứ để mất, nên nó không được gửi tới đó.
 #
-# Mot chung chi khong bao gio duoc gui di la mot chung chi khong the bi lo boi bat cu thu gi xu ly
-# cai request no khong bao gio duoc gui toi.
+# Một chứng chỉ không bao giờ được gửi đi là một chứng chỉ không thể bị lộ bởi bất cứ thứ gì xử lý
+# cái request nó không bao giờ được gửi tới.
 REFRESH_COOKIE_PATH = "/auth/session"
 
 
@@ -81,15 +81,15 @@ REFRESH_COOKIE_PATH = "/auth/session"
 def _login_throttle() -> LoginThrottle:
     """One throttle for the whole process, built on first use rather than at import.
 
-    Mot bo dem khoa tai khoan dung chung cho ca tien trinh, dung len o lan goi dau tien chu
-    khong phai luc import.
+    Một bộ đếm khóa tài khoản dùng chung cho cả tiến trình, dựng lên ở lần gọi đầu tiên chứ
+    không phải lúc import.
 
     Building it at import time would mean merely importing this module required a full, valid
     environment - which would make the module impossible to import in a test that has no
     business needing a database URL or an API key.
-    Neu dung len ngay luc import thi chi rieng viec import module nay da doi mot moi truong day
-    du va hop le - khien module khong the import duoc trong mot bai test von chang lien quan gi
-    toi database hay API key.
+    Nếu dựng lên ngay lúc import thì chỉ riêng việc import module này đã đòi một môi trường đầy
+    đủ và hợp lệ - khiến module không thể import được trong một bài test vốn chẳng liên quan gì
+    tới database hay API key.
     """
     settings = load_settings()
     return LoginThrottle(
@@ -106,16 +106,16 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     """Only the access token. The refresh token is not in here, and must not be.
 
-    Chi co access token. Refresh token khong nam trong day, va khong duoc phep nam trong day.
+    Chỉ có access token. Refresh token không nằm trong đây, và không được phép nằm trong đây.
 
     Putting the refresh token in the body would hand it to JavaScript, and the frontend would then
     have to keep it somewhere - which in practice means localStorage, which in practice means the
     first XSS bug walks away with a credential good for a fortnight. It goes in an HttpOnly cookie
     instead, where script cannot reach it at all.
-    Neu dat refresh token vao body thi tuc la trao no cho JavaScript, va frontend se phai cat no o
-    dau do - ma trong thuc te nghia la localStorage, ma trong thuc te nghia la lo hong XSS dau tien
-    se mang di mot chung chi con gia tri hai tuan. Thay vao do no di trong mot cookie HttpOnly, noi
-    ma script khong the cham toi.
+    Nếu đặt refresh token vào body thì tức là trao nó cho JavaScript, và frontend sẽ phải cất nó ở
+    đâu đó - mà trong thực tế nghĩa là localStorage, mà trong thực tế nghĩa là lỗ hổng XSS đầu tiên
+    sẽ mang đi một chứng chỉ còn giá trị hai tuần. Thay vào đó nó đi trong một cookie HttpOnly, nơi
+    mà script không thể chạm tới.
     """
 
     access_token: str
@@ -129,19 +129,19 @@ def _set_refresh_cookie(response: Response, token: str, settings: Settings) -> N
         value=token,
         max_age=settings.refresh_token_ttl_days * 24 * 3600,
         # Script cannot read it.
-        # Script khong doc duoc.
+        # Script không đọc được.
         httponly=True,
         # The browser will not send it over plain HTTP.
-        # Trinh duyet se khong gui no qua HTTP tran.
+        # Trình duyệt sẽ không gửi nó qua HTTP trần.
         secure=settings.cookie_secure,
         # A cookie is attached by the browser automatically, which is exactly what makes a
         # cookie-borne credential vulnerable to CSRF: some other site can cause the browser to
         # POST to /auth/refresh and the cookie rides along. SameSite=strict is what stops that -
         # the cookie is simply not attached to a request that originated anywhere else.
-        # Cookie duoc trinh duyet tu dong dinh kem, va do dung la thu lam cho mot chung chi nam
-        # trong cookie de bi CSRF: mot trang web khac co the khien trinh duyet POST toi
-        # /auth/refresh va cookie di theo luon. SameSite=strict chan dieu do - cookie don gian la
-        # khong duoc dinh kem vao mot request xuat phat tu bat ky noi nao khac.
+        # Cookie được trình duyệt tự động đính kèm, và đó đúng là thứ làm cho một chứng chỉ nằm
+        # trong cookie dễ bị CSRF: một trang web khác có thể khiến trình duyệt POST tới
+        # /auth/refresh và cookie đi theo luôn. SameSite=strict chặn điều đó - cookie đơn giản là
+        # không được đính kèm vào một request xuất phát từ bất kỳ nơi nào khác.
         samesite="strict",
         path=REFRESH_COOKIE_PATH,
     )
@@ -169,14 +169,14 @@ class ChatRequest(BaseModel):
     # surest way to stop a caller naming someone else's student id is to leave no field for one.
     # A `student_id` sent in this body today is simply ignored - it is not a field of this model.
     #
-    # O day co y khong con `student_id`. Truoc kia no nam trong body nay, nghia la ai cung neu ra
-    # duoc bat ky ai: cac tool se doc bang diem cua sinh vien do, con guardrail se kiem tra mon
-    # tien quyet cua sinh vien do. Bay gio no den tu token da ky, va khong den tu dau khac.
+    # Ở đây cố ý không còn `student_id`. Trước kia nó nằm trong body này, nghĩa là ai cũng nêu ra
+    # được bất kỳ ai: các tool sẽ đọc bảng điểm của sinh viên đó, còn guardrail sẽ kiểm tra môn
+    # tiên quyết của sinh viên đó. Bây giờ nó đến từ token đã ký, và không đến từ đâu khác.
     #
-    # Day chinh la nuoc di da lam voi schema cua cac tool, ap dung ra them mot lop nua: cach chac
-    # chan nhat de nguoi goi khong neu ra duoc ma sinh vien cua nguoi khac la khong chua mot o
-    # trong nao cho no. Mot `student_id` gui kem trong body hom nay se bi bo qua - no khong con
-    # la mot truong cua model nay nua.
+    # Đây chính là nước đi đã làm với schema của các tool, áp dụng ra thêm một lớp nữa: cách chắc
+    # chắn nhất để người gọi không nêu ra được mã sinh viên của người khác là không chừa một ô
+    # trống nào cho nó. Một `student_id` gửi kèm trong body hôm nay sẽ bị bỏ qua - nó không còn
+    # là một trường của model này nữa.
 
 
 class ToolCallView(BaseModel):
@@ -199,7 +199,7 @@ class ChatResponse(BaseModel):
 def login(payload: LoginRequest, response: Response) -> TokenResponse:
     """Exchange a student id and password for an access token, plus a refresh cookie.
 
-    Doi ma sinh vien va mat khau lay mot access token, kem mot cookie refresh.
+    Đổi mã sinh viên và mật khẩu lấy một access token, kèm một cookie refresh.
     """
     settings = load_settings()
     now = time.monotonic()
@@ -210,8 +210,8 @@ def login(payload: LoginRequest, response: Response) -> TokenResponse:
     if waiting is not None:
         # 423 would be more precise, but 429 with Retry-After is what clients already know how
         # to obey, and it is the same answer this service gives when Gemini rate limits it.
-        # Ma 423 thi chinh xac hon, nhung 429 kem Retry-After moi la thu client von da biet cach
-        # tuan theo, va cung la cau tra loi dich vu nay dua ra khi bi Gemini chan vi qua han muc.
+        # Mã 423 thì chính xác hơn, nhưng 429 kèm Retry-After mới là thứ client vốn đã biết cách
+        # tuân theo, và cũng là câu trả lời dịch vụ này đưa ra khi bị Gemini chặn vì quá hạn mức.
         logger.warning(
             "Dang nhap bi khoa tam thoi cho %s", mask_student_id(payload.student_id)
         )
@@ -226,8 +226,8 @@ def login(payload: LoginRequest, response: Response) -> TokenResponse:
         throttle.record_failure(payload.student_id, now)
         # One message for both "no such student" and "wrong password". Saying which one it was
         # would let anyone read the list of student ids off this endpoint.
-        # Mot thong bao chung cho ca "khong co sinh vien nay" lan "sai mat khau". Neu noi ro la
-        # truong hop nao thi ai cung do duoc danh sach ma sinh vien tu chinh endpoint nay.
+        # Một thông báo chung cho cả "không có sinh viên này" lẫn "sai mật khẩu". Nếu nói rõ là
+        # trường hợp nào thì ai cũng dò được danh sách mã sinh viên từ chính endpoint này.
         logger.warning("Dang nhap that bai cho %s", mask_student_id(payload.student_id))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -239,8 +239,8 @@ def login(payload: LoginRequest, response: Response) -> TokenResponse:
 
     # A fresh family per login, so signing in on a phone does not disturb the laptop, and
     # revoking one does not revoke the other.
-    # Moi lan dang nhap mo mot ho rieng, nen dang nhap tren dien thoai khong lam phien may tinh,
-    # va thu hoi cai nay khong thu hoi cai kia.
+    # Mỗi lần đăng nhập mở một họ riêng, nên đăng nhập trên điện thoại không làm phiền máy tính,
+    # và thu hồi cái này không thu hồi cái kia.
     refresh_token = refresh_tokens.issue_for_new_login(student_id, settings)
     _set_refresh_cookie(response, refresh_token, settings)
 
@@ -257,14 +257,14 @@ def refresh(
 ) -> TokenResponse:
     """Spend the refresh cookie, get a new access token and a new refresh cookie.
 
-    Tieu cookie refresh, nhan mot access token moi va mot cookie refresh moi.
+    Tiêu cookie refresh, nhận một access token mới và một cookie refresh mới.
 
     The old refresh token is dead the instant this succeeds. That is what rotation buys: a token
     copied off the wire is only good until its rightful owner next refreshes, instead of being
     good for the next fortnight.
-    Refresh token cu chet ngay khi lenh nay thanh cong. Do la thu ma viec xoay vong mua ve: mot
-    token bi sao chep tren duong truyen chi con gia tri cho toi lan refresh tiep theo cua chu that
-    su cua no, thay vi con gia tri suot hai tuan toi.
+    Refresh token cũ chết ngay khi lệnh này thành công. Đó là thứ mà việc xoay vòng mua về: một
+    token bị sao chép trên đường truyền chỉ còn giá trị cho tới lần refresh tiếp theo của chủ thật
+    sự của nó, thay vì còn giá trị suốt hai tuần tới.
     """
     settings = load_settings()
 
@@ -277,9 +277,9 @@ def refresh(
         # The alarm, not the noise. The family is already revoked by the time we get here; all
         # that is left is to clear the cookie so the browser stops presenting a dead token, and to
         # say so loudly enough that someone watching the metrics can see it.
-        # Day la bao dong, khong phai nhieu. Ca ho token da bi thu hoi truoc khi den duoc day; viec
-        # con lai chi la xoa cookie de trinh duyet thoi trinh ra mot token da chet, va noi to du de
-        # nguoi dang nhin vao metrics thay duoc.
+        # Đây là báo động, không phải nhiễu. Cả họ token đã bị thu hồi trước khi đến được đây; việc
+        # còn lại chỉ là xóa cookie để trình duyệt thôi trình ra một token đã chết, và nói to đủ để
+        # người đang nhìn vào metrics thấy được.
         metrics.record_refresh_reuse()
         logger.warning("PHAT HIEN TAI SU DUNG REFRESH TOKEN. Da thu hoi ca ho token.")
         _clear_refresh_cookie(response, settings)
@@ -301,19 +301,19 @@ def logout(
 ) -> None:
     """Revoke the whole family this token belongs to, and clear the cookie.
 
-    Thu hoi toan bo ho token ma token nay thuoc ve, va xoa cookie.
+    Thu hồi toàn bộ họ token mà token này thuộc về, và xóa cookie.
 
     The family, not just the token in hand. Killing only the token presented would leave its
     parent - already rotated, but still alive in the table - and anyone holding that parent could
     carry on refreshing as if nothing had happened.
-    Ca ho, chu khong chi token dang cam tren tay. Neu chi giet token duoc trinh ra thi token cha
-    cua no - da bi xoay vong, nhung van con song trong bang - se sot lai, va bat ky ai dang giu
-    token cha do van cu the ma refresh tiep nhu chua he co chuyen gi.
+    Cả họ, chứ không chỉ token đang cầm trên tay. Nếu chỉ giết token được trình ra thì token cha
+    của nó - đã bị xoay vòng, nhưng vẫn còn sống trong bảng - sẽ sót lại, và bất kỳ ai đang giữ
+    token cha đó vẫn cứ thế mà refresh tiếp như chưa hề có chuyện gì.
 
     Logging out with no cookie, or with a token nobody recognises, still succeeds: the caller ends
     up logged out either way, which is exactly what they asked for.
-    Dang xuat ma khong co cookie, hoac voi mot token khong ai nhan ra, van thanh cong: du sao nguoi
-    goi cung ket thuc o trang thai da dang xuat, dung nhu ho muon.
+    Đăng xuất mà không có cookie, hoặc với một token không ai nhận ra, vẫn thành công: dù sao người
+    gọi cũng kết thúc ở trạng thái đã đăng xuất, đúng như họ muốn.
     """
     settings = load_settings()
 
@@ -346,8 +346,8 @@ def chat(
     except UpstreamUnavailable as error:
         # Being rate limited by the model provider is not a bug in this service, so it is
         # reported as 429 with a Retry-After rather than as an internal error.
-        # Bi nha cung cap model chan vi qua han muc khong phai loi cua dich vu nay, nen duoc bao
-        # ve dang 429 kem Retry-After thay vi bao la loi noi bo.
+        # Bị nhà cung cấp model chặn vì quá hạn mức không phải lỗi của dịch vụ này, nên được báo
+        # về dạng 429 kèm Retry-After thay vì báo là lỗi nội bộ.
         metrics.record_error()
         logger.warning("Gemini khong phuc vu duoc: %s", error)
         headers = {}

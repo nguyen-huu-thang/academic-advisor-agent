@@ -1,6 +1,6 @@
 """The agent loop: plan, call tools, observe results, answer.
 
-Vong lap agent: lap ke hoach, goi tool, quan sat ket qua, tra loi.
+Vòng lặp agent: lập kế hoạch, gọi tool, quan sát kết quả, trả lời.
 """
 
 import json
@@ -72,7 +72,7 @@ class AgentResult:
 class StudentNotFound(Exception):
     """The session names a student the university has no record of.
 
-    Phien lam viec neu ra mot sinh vien ma nha truong khong co ho so.
+    Phiên làm việc nêu ra một sinh viên mà nhà trường không có hồ sơ.
     """
 
 
@@ -95,9 +95,9 @@ class AdvisorAgent:
         # Everything the guardrail is allowed to trust is read once, here, before the model is
         # given a chance to say anything. Reading it after the model spoke would mean reading a
         # world the model has had a chance to describe.
-        # Moi thu guardrail duoc phep tin deu duoc doc mot lan, tai day, truoc khi model co co
-        # hoi noi bat cu dieu gi. Neu doc sau khi model da noi thi hoa ra lai doc mot the gioi ma
-        # model da kip mo ta lai.
+        # Mọi thứ guardrail được phép tin đều được đọc một lần, tại đây, trước khi model có cơ
+        # hội nói bất cứ điều gì. Nếu đọc sau khi model đã nói thì hóa ra lại đọc một thế giới mà
+        # model đã kịp mô tả lại.
         base_context = self._load_turn_context(session_id, student_id)
 
         contents = self._memory.load_history(session_id, student_id)
@@ -112,8 +112,8 @@ class AdvisorAgent:
 
         # The loop is bounded: a model that keeps asking for tools forever would otherwise burn
         # tokens and money without ever answering the student.
-        # Vong lap co gioi han: neu khong, mot model cu lien tuc doi goi tool se dot token va
-        # tien ma khong bao gio tra loi sinh vien.
+        # Vòng lặp có giới hạn: nếu không, một model cứ liên tục đòi gọi tool sẽ đốt token và
+        # tiền mà không bao giờ trả lời sinh viên.
         while iterations < self._settings.max_tool_iterations:
             iterations += 1
             result = self._client.generate(
@@ -123,6 +123,10 @@ class AdvisorAgent:
             )
             usage.add(result.usage)
 
+            # No function call in the reply means the model is done looking things up and has
+            # produced its final answer for the student.
+            # Không còn lệnh gọi hàm trong phản hồi nghĩa là model đã tra cứu xong và đưa ra
+            # câu trả lời cuối cùng cho sinh viên.
             if not result.function_calls:
                 answer = result.text or "Xin loi, toi chua tao duoc cau tra loi."
                 break
@@ -130,6 +134,10 @@ class AdvisorAgent:
             if result.content is not None:
                 contents.append(result.content)
 
+            # Each requested call is checked and executed one by one; every result is sent
+            # back to the model in the next round so it can keep reasoning.
+            # Từng lệnh gọi được kiểm tra và thực thi lần lượt; mọi kết quả được gửi ngược lại
+            # cho model ở vòng kế tiếp để nó tiếp tục suy luận.
             response_parts = []
             for call in result.function_calls:
                 record, payload = self._handle_tool_call(base_context, call)
@@ -141,7 +149,7 @@ class AdvisorAgent:
             contents.append(types.Content(role="user", parts=response_parts))
         else:
             # The loop ran out of iterations without the model producing an answer.
-            # Vong lap het so lan cho phep ma model van chua dua ra cau tra loi.
+            # Vòng lặp hết số lần cho phép mà model vẫn chưa đưa ra câu trả lời.
             answer = (
                 "Xin loi, yeu cau nay can nhieu buoc tra cuu hon muc cho phep. "
                 "Ban vui long chia nho cau hoi giup toi."
@@ -171,9 +179,9 @@ class AdvisorAgent:
             session_id=session_id,
             # A fresh id for this one student message. It is what lets the guardrail tell "the
             # student replied to me" apart from "the model decided the student would have replied".
-            # Mot id moi cho dung mot tin nhan nay cua sinh vien. Chinh no cho phep guardrail phan
-            # biet "sinh vien da tra loi toi" voi "model tu quyet dinh rang sinh vien chac se
-            # tra loi nhu vay".
+            # Một id mới cho đúng một tin nhắn này của sinh viên. Chính nó cho phép guardrail phân
+            # biệt "sinh viên đã trả lời tôi" với "model tự quyết định rằng sinh viên chắc sẽ
+            # trả lời như vậy".
             turn_id=uuid.uuid4().hex,
             semester=semester,
             academic_status=academic_status,
@@ -188,14 +196,14 @@ class AdvisorAgent:
     ) -> TurnContext:
         """Attach the class, and the slip, that this particular call is about.
 
-        Gan vao context dung lop hoc phan, va dung phieu, ma loi goi cu the nay dang nhac toi.
+        Gắn vào context đúng lớp học phần, và đúng phiếu, mà lời gọi cụ thể này đang nhắc tới.
 
         Note where the class comes from when confirming: from the slip, not from the model's
         arguments. The model hands over a slip code and nothing else, so it cannot prepare a
         registration for one class and then confirm its way into another.
-        Chu y lop hoc phan den tu dau khi xac nhan: den tu phieu, khong den tu tham so cua model.
-        Model chi dua ra mot ma phieu chu khong dua gi khac, nen no khong the chuan bi mot lenh
-        dang ky cho lop nay roi xac nhan de chui vao mot lop khac.
+        Chú ý lớp học phần đến từ đâu khi xác nhận: đến từ phiếu, không đến từ tham số của model.
+        Model chỉ đưa ra một mã phiếu chứ không đưa gì khác, nên nó không thể chuẩn bị một lệnh
+        đăng ký cho lớp này rồi xác nhận để chui vào một lớp khác.
         """
         if tool_name == "dang_ky_hoc_phan":
             section_id = _as_int(arguments.get("ma_lop"))
@@ -218,7 +226,7 @@ class AdvisorAgent:
     ) -> tuple[ToolCallRecord, dict]:
         """Run one tool call through the guardrail, the audit log, and then execution.
 
-        Cho mot lenh goi tool di qua guardrail, ghi nhat ky kiem toan, roi moi thuc thi.
+        Cho một lệnh gọi tool đi qua guardrail, ghi nhật ký kiểm toán, rồi mới thực thi.
         """
         name = call.name or ""
         arguments = dict(call.args or {})
@@ -242,8 +250,8 @@ class AdvisorAgent:
         if not decision.allowed:
             # The refusal is fed back to the model as the tool's result, so it can explain the
             # situation to the student instead of silently failing.
-            # Ly do tu choi duoc tra nguoc lai cho model nhu ket qua cua tool, de model giai thich
-            # lai cho sinh vien thay vi that bai am tham.
+            # Lý do từ chối được trả ngược lại cho model như kết quả của tool, để model giải thích
+            # lại cho sinh viên thay vì thất bại âm thầm.
             return record, {"tu_choi": decision.note}
 
         try:
@@ -264,12 +272,12 @@ class AdvisorAgent:
     ) -> None:
         """Record the call and the verdict before the tool runs, not after.
 
-        Ghi lai lenh goi va quyet dinh truoc khi tool chay, chu khong phai sau.
+        Ghi lại lệnh gọi và quyết định trước khi tool chạy, chứ không phải sau.
 
         Writing afterwards would lose exactly the calls worth investigating: the ones that
         crashed halfway through.
-        Neu ghi sau khi chay xong thi se mat dung nhung lenh goi dang de dieu tra nhat: nhung
-        lenh vo giua chung.
+        Nếu ghi sau khi chạy xong thì sẽ mất đúng những lệnh gọi đáng để điều tra nhất: những
+        lệnh vỡ giữa chừng.
         """
         with get_connection() as conn:
             conn.execute(
@@ -292,8 +300,10 @@ class AdvisorAgent:
 def _as_int(value: object) -> int | None:
     """Read a class id the model supplied, without trusting it to be a number.
 
-    Doc ma lop do model dua ra, ma khong tin rang no chac chan la mot con so.
+    Đọc mã lớp do model đưa ra, mà không tin rằng nó chắc chắn là một con số.
     """
+    # bool is a subclass of int in Python, so it must be rejected first.
+    # bool là lớp con của int trong Python, nên phải loại nó trước tiên.
     if isinstance(value, bool):
         return None
     if isinstance(value, int):

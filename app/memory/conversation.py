@@ -1,6 +1,6 @@
 """Conversation memory backed by PostgreSQL.
 
-Bo nho hoi thoai, luu trong PostgreSQL.
+Bộ nhớ hội thoại, lưu trong PostgreSQL.
 """
 
 from google.genai import types
@@ -9,24 +9,24 @@ from app.db import get_connection
 
 # Only the recent turns are replayed to the model. Sending the whole history would grow the
 # prompt without bound, and input tokens are what the bill is made of.
-# Chi phat lai cac luot gan day cho model. Gui toan bo lich su se lam prompt phinh ra vo han,
-# ma input token chinh la thu tao nen hoa don.
+# Chỉ phát lại các lượt gần đây cho model. Gửi toàn bộ lịch sử sẽ làm prompt phình ra vô hạn,
+# mà input token chính là thứ tạo nên hóa đơn.
 DEFAULT_HISTORY_TURNS = 10
 
 
 class ConversationMemory:
     """History scoped by student as well as by session.
 
-    Lich su duoc gioi han theo ca sinh vien lan phien lam viec.
+    Lịch sử được giới hạn theo cả sinh viên lẫn phiên làm việc.
 
     Both keys are used on every read. A session id alone would be enough to fetch a
     conversation, so guessing or reusing someone else's session id would replay their
     conversation into this student's prompt. Requiring the student id as well means a session
     id belonging to another student simply returns nothing.
-    Ca hai khoa deu duoc dung o moi lan doc. Neu chi can session id la lay duoc hoi thoai, thi
-    doan trung hoac dung lai session id cua nguoi khac se keo hoi thoai cua ho vao prompt cua
-    sinh vien nay. Bat buoc phai co ca ma sinh vien nghia la mot session id cua sinh vien khac
-    se chi tra ve rong.
+    Cả hai khóa đều được dùng ở mọi lần đọc. Nếu chỉ cần session id là lấy được hội thoại, thì
+    đoán trúng hoặc dùng lại session id của người khác sẽ kéo hội thoại của họ vào prompt của
+    sinh viên này. Bắt buộc phải có cả mã sinh viên nghĩa là một session id của sinh viên khác
+    sẽ chỉ trả về rỗng.
     """
 
     def __init__(self, *, history_turns: int = DEFAULT_HISTORY_TURNS) -> None:
@@ -35,17 +35,17 @@ class ConversationMemory:
     def load_history(self, session_id: str, student_id: str) -> list[types.Content]:
         """Load recent conversation turns for one student's session, in chronological order.
 
-        Nap cac luot hoi thoai gan day cua mot phien cua mot sinh vien, theo dung thu tu thoi gian.
+        Nạp các lượt hội thoại gần đây của một phiên của một sinh viên, theo đúng thứ tự thời gian.
 
-        Truy van long hai tang, va thu tu sap xep hai tang la nguoc nhau - co chu dich:
-          - Tang trong: ORDER BY id DESC ... LIMIT N -> lay N dong MOI NHAT (id lon nhat truoc).
-          - Tang ngoai: ORDER BY id ASC             -> dao lai ve thu tu cu -> moi, dung thu tu
-            hoi thoai de nap cho model.
-        Neu chi co mot tang ASC + LIMIT thi se lay nham N dong DAU TIEN (cu nhat), khong phai
-        gan day nhat. Con neu de nguyen thu tu DESC thi model doc hoi thoai nguoc dong thoi gian.
-        Nhan doi (history_turns * 2) vi moi luot gom hai dong: mot cua sinh vien, mot cua model.
-        Loc theo ca session_id lan student_id (xem docstring cua class) de khong lo doc nham
-        hoi thoai cua nguoi khac.
+        Truy vấn lồng hai tầng, và thứ tự sắp xếp hai tầng là ngược nhau - có chủ đích:
+          - Tầng trong: ORDER BY id DESC ... LIMIT N -> lấy N dòng MỚI NHẤT (id lớn nhất trước).
+          - Tầng ngoài: ORDER BY id ASC             -> đảo lại về thứ tự cũ -> mới, đúng thứ tự
+            hội thoại để nạp cho model.
+        Nếu chỉ có một tầng ASC + LIMIT thì sẽ lấy nhầm N dòng ĐẦU TIÊN (cũ nhất), không phải
+        gần đây nhất. Còn nếu để nguyên thứ tự DESC thì model đọc hội thoại ngược dòng thời gian.
+        Nhân đôi (history_turns * 2) vì mỗi lượt gồm hai dòng: một của sinh viên, một của model.
+        Lọc theo cả session_id lẫn student_id (xem docstring của class) để không lỡ đọc nhầm
+        hội thoại của người khác.
         """
         with get_connection() as conn:
             rows = conn.execute(
@@ -62,7 +62,7 @@ class ConversationMemory:
                 (session_id, student_id, self._history_turns * 2),
             ).fetchall()
 
-        # Chuyen moi dong thanh mot Content cua Gemini: role la "user" (sinh vien) hoac "model".
+        # Chuyển mỗi dòng thành một Content của Gemini: role là "user" (sinh viên) hoặc "model".
         return [
             types.Content(role=row["role"], parts=[types.Part.from_text(text=row["content"])])
             for row in rows

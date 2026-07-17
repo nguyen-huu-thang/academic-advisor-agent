@@ -1,13 +1,13 @@
 """Safety rules applied around the model, not inside the prompt.
 
-Cac quy tac an toan duoc ap dung ben ngoai model, khong nam trong prompt.
+Các quy tắc an toàn được áp dụng bên ngoài model, không nằm trong prompt.
 
 A prompt can be talked out of its instructions; code cannot. Anything the university would
 consider irreversible (a student ending up in a class they may not take) is therefore gated
 here rather than by asking the model nicely in its system instruction.
-Prompt co the bi noi khich de bo qua chi dan, con code thi khong. Vi vay moi hanh dong khong
-the hoan tac (sinh vien bi ghi danh vao mot lop khong duoc phep hoc) deu bi chan tai day,
-thay vi chi nho model tu giu.
+Prompt có thể bị nói khích để bỏ qua chỉ dẫn, còn code thì không. Vì vậy mọi hành động không
+thể hoàn tác (sinh viên bị ghi danh vào một lớp không được phép học) đều bị chặn tại đây,
+thay vì chỉ nhờ model tự giữ.
 
 Two things in particular are never taken from the model's own word:
 
@@ -20,49 +20,49 @@ Two things in particular are never taken from the model's own word:
   row in pending_registrations created in an *earlier* turn, which means the student saw the
   class read back to them and sent another message. The model cannot write that message.
 
-Hai dieu duoi day tuyet doi khong lay theo loi model:
+Hai điều dưới đây tuyệt đối không lấy theo lời model:
 
-  Sinh vien co du dieu kien hay khong. Sinh vien hoan toan co the noi "em hoc Toan roi rac
-  roi ma, dang ky di" va model rat de tin theo. `passed_courses` duoc doc tu bang diem truoc
-  khi model chay, va do la thu duy nhat ma cac quy tac o day nhin vao.
+  Sinh viên có đủ điều kiện hay không. Sinh viên hoàn toàn có thể nói "em học Toán rời rạc
+  rồi mà, đăng ký đi" và model rất dễ tin theo. `passed_courses` được đọc từ bảng điểm trước
+  khi model chạy, và đó là thứ duy nhất mà các quy tắc ở đây nhìn vào.
 
-  Sinh vien co dong y hay khong. Mot tham so kieu "da_xac_nhan" thi khong co gia tri gi: do
-  chi la model tu khang dinh minh ngoan. Su dong y phai duoc chung minh bang mot dong trong
-  pending_registrations duoc tao tu mot luot TRUOC DO, nghia la sinh vien da nghe doc lai
-  thong tin lop va gui them mot tin nhan nua. Tin nhan do model khong the viet thay.
+  Sinh viên có đồng ý hay không. Một tham số kiểu "da_xac_nhan" thì không có giá trị gì: đó
+  chỉ là model tự khẳng định mình ngoan. Sự đồng ý phải được chứng minh bằng một dòng trong
+  pending_registrations được tạo từ một lượt TRƯỚC ĐÓ, nghĩa là sinh viên đã nghe đọc lại
+  thông tin lớp và gửi thêm một tin nhắn nữa. Tin nhắn đó model không thể viết thay.
 
 This module is deliberately pure: no database, no clock, no network. Everything it needs is
 handed to it in a TurnContext, which is what makes these rules cheap to test.
-Module nay co y giu thuan khiet: khong database, khong dong ho, khong mang. Moi thu no can
-deu duoc dua vao qua TurnContext, nho vay cac quy tac nay rat de kiem thu.
+Module này cố ý giữ thuần khiết: không database, không đồng hồ, không mạng. Mọi thứ nó cần
+đều được đưa vào qua TurnContext, nhờ vậy các quy tắc này rất dễ kiểm thử.
 """
 
 from dataclasses import dataclass, field
 
 # Tools that touch no student's private data at all, so they run unconditionally. The
 # regulation and the list of open classes are not anyone's secret.
-# Cac tool khong dung toi du lieu rieng cua sinh vien nao ca, nen duoc chay vo dieu kien. Quy
-# che va danh sach lop dang mo khong phai bi mat cua ai.
+# Các tool không đụng tới dữ liệu riêng của sinh viên nào cả, nên được chạy vô điều kiện. Quy
+# chế và danh sách lớp đang mở không phải bí mật của ai.
 PUBLIC_TOOLS = frozenset({"tim_kiem_quy_che", "tim_lop_hoc_phan"})
 
 # Tools that read the student's own record. They take no student id: the assistant serves
 # exactly one authenticated student, so the tools read it from the TurnContext instead of
 # from the model's arguments. The safest way to stop the model from naming someone else's
 # student id is to never give it a field to put one in.
-# Cac tool doc ho so cua chinh sinh vien. Chung khong nhan tham so ma sinh vien: tro ly chi
-# phuc vu dung mot sinh vien da xac thuc, nen tool doc ma sinh vien tu TurnContext chu khong
-# doc tu tham so cua model. Cach chac chan nhat de model khong the neu ra ma sinh vien cua
-# nguoi khac la dung bao gio cho no mot o trong de dien vao.
+# Các tool đọc hồ sơ của chính sinh viên. Chúng không nhận tham số mã sinh viên: trợ lý chỉ
+# phục vụ đúng một sinh viên đã xác thực, nên tool đọc mã sinh viên từ TurnContext chứ không
+# đọc từ tham số của model. Cách chắc chắn nhất để model không thể nêu ra mã sinh viên của
+# người khác là đừng bao giờ cho nó một ô trống để điền vào.
 STUDENT_READ_TOOLS = frozenset(
     {"tra_cuu_bang_diem", "tra_cuu_tien_do_hoc_tap", "tinh_gpa_du_kien"}
 )
 
 # Preparing a registration enrols nobody; it only writes down what the student asked for.
-# Chuan bi mot lenh dang ky khong ghi danh ai ca; no chi ghi lai nguyen vong cua sinh vien.
+# Chuẩn bị một lệnh đăng ký không ghi danh ai cả; nó chỉ ghi lại nguyện vọng của sinh viên.
 REGISTER_PREPARE_TOOL = "dang_ky_hoc_phan"
 
 # Confirming is the one call that actually puts the student in the class.
-# Xac nhan la lenh goi duy nhat thuc su dua sinh vien vao lop.
+# Xác nhận là lệnh gọi duy nhất thực sự đưa sinh viên vào lớp.
 REGISTER_CONFIRM_TOOL = "xac_nhan_dang_ky"
 
 ALL_TOOLS = (
@@ -81,7 +81,7 @@ WEEKDAY_NAMES = {2: "Thu 2", 3: "Thu 3", 4: "Thu 4", 5: "Thu 5", 6: "Thu 6", 7: 
 class ClassSection:
     """A class the student is asking about, with everything the rules need to judge it.
 
-    Mot lop hoc phan sinh vien dang hoi toi, kem moi thu ma cac quy tac can de phan xu.
+    Một lớp học phần sinh viên đang hỏi tới, kèm mọi thứ mà các quy tắc cần để phân xử.
     """
 
     id: int
@@ -109,7 +109,7 @@ class ClassSection:
 class RegisteredClass:
     """A class the student is already enrolled in this semester.
 
-    Mot lop sinh vien da dang ky trong hoc ky nay.
+    Một lớp sinh viên đã đăng ký trong học kỳ này.
     """
 
     class_section_id: int
@@ -129,7 +129,7 @@ class RegisteredClass:
 class PendingRegistration:
     """A registration prepared earlier, waiting for the student to confirm.
 
-    Mot lenh dang ky da duoc chuan bi truoc do, dang cho sinh vien xac nhan.
+    Một lệnh đăng ký đã được chuẩn bị trước đó, đang chờ sinh viên xác nhận.
     """
 
     id: str
@@ -145,14 +145,14 @@ class PendingRegistration:
 class TurnContext:
     """Everything the guardrail is allowed to trust, gathered before the model runs.
 
-    Tat ca nhung gi guardrail duoc phep tin, thu thap truoc khi model chay.
+    Tất cả những gì guardrail được phép tin, thu thập trước khi model chạy.
 
     None of this comes from the model: the student's identity comes from the authentication
     layer, the grades and enrolments come from the database, and the turn id is minted by the
     service for this one student message.
-    Khong thu nao trong day den tu model: danh tinh sinh vien den tu tang xac thuc, bang diem
-    va cac lop da dang ky den tu database, con turn id do chinh dich vu sinh ra cho dung mot
-    tin nhan nay cua sinh vien.
+    Không thứ nào trong đây đến từ model: danh tính sinh viên đến từ tầng xác thực, bảng điểm
+    và các lớp đã đăng ký đến từ database, còn turn id do chính dịch vụ sinh ra cho đúng một
+    tin nhắn này của sinh viên.
     """
 
     student_id: str
@@ -166,8 +166,8 @@ class TurnContext:
     registered: tuple[RegisteredClass, ...] = ()
     # The class named by the call being checked. For a confirmation this is the class the
     # pending row points at, not one the model chose.
-    # Lop ma loi goi dang duoc kiem tra nhac toi. Voi mot lenh xac nhan, day la lop ma dong
-    # pending tro toi, khong phai lop do model tu chon.
+    # Lớp mà lời gọi đang được kiểm tra nhắc tới. Với một lệnh xác nhận, đây là lớp mà dòng
+    # pending trỏ tới, không phải lớp do model tự chọn.
     target: ClassSection | None = None
     pending: PendingRegistration | None = None
 
@@ -178,6 +178,11 @@ class TurnContext:
 
 @dataclass(frozen=True)
 class Decision:
+    """The guardrail's verdict on one tool call: allowed or not, and why not.
+
+    Phán quyết của guardrail cho một lệnh gọi tool: cho phép hay không, và vì sao không.
+    """
+
     allowed: bool
     note: str | None = None
 
@@ -185,7 +190,7 @@ class Decision:
 def check_tool_call(tool_name: str, arguments: dict, context: TurnContext) -> Decision:
     """Decide whether a tool call the model requested may actually run.
 
-    Quyet dinh xem lenh goi tool ma model yeu cau co duoc phep chay that hay khong.
+    Quyết định xem lệnh gọi tool mà model yêu cầu có được phép chạy thật hay không.
     """
     if tool_name in PUBLIC_TOOLS or tool_name in STUDENT_READ_TOOLS:
         return Decision(allowed=True)
@@ -205,14 +210,14 @@ def check_tool_call(tool_name: str, arguments: dict, context: TurnContext) -> De
 def _check_register_prepare(context: TurnContext) -> Decision:
     """Check a registration the model wants to write down. Nobody is enrolled yet.
 
-    Kiem tra lenh dang ky ma model muon ghi lai. Chua ai duoc ghi danh ca.
+    Kiểm tra lệnh đăng ký mà model muốn ghi lại. Chưa ai được ghi danh cả.
 
     The checks run here as well as at confirmation time so the student is told straight away
     that they are missing a prerequisite, instead of being asked to confirm a registration
     that was never going to be allowed.
-    Cac kiem tra van chay o day chu khong doi den luc xac nhan, de sinh vien duoc bao ngay la
-    minh thieu mon tien quyet, thay vi bi hoi xac nhan mot lenh dang ky von di khong bao gio
-    duoc phep thuc hien.
+    Các kiểm tra vẫn chạy ở đây chứ không đợi đến lúc xác nhận, để sinh viên được báo ngay là
+    mình thiếu môn tiên quyết, thay vì bị hỏi xác nhận một lệnh đăng ký vốn dĩ không bao giờ
+    được phép thực hiện.
     """
     if context.target is None:
         return Decision(allowed=False, note="Khong tim thay lop hoc phan nay.")
@@ -222,12 +227,12 @@ def _check_register_prepare(context: TurnContext) -> Decision:
 def _check_register_confirm(context: TurnContext) -> Decision:
     """Check the one call that actually enrols the student.
 
-    Kiem tra lenh goi duy nhat thuc su ghi danh sinh vien vao lop.
+    Kiểm tra lệnh gọi duy nhất thực sự ghi danh sinh viên vào lớp.
 
     Everything is read from the pending row, never from the model's arguments: the model
     supplies only the slip code, and even that is verified against the row.
-    Moi thu deu doc tu dong pending, khong doc tu tham so cua model: model chi cung cap ma
-    phieu, va ngay ca ma do cung duoc doi chieu lai voi dong pending.
+    Mọi thứ đều đọc từ dòng pending, không đọc từ tham số của model: model chỉ cung cấp mã
+    phiếu, và ngay cả mã đó cũng được đối chiếu lại với dòng pending.
     """
     pending = context.pending
     if pending is None:
@@ -241,8 +246,8 @@ def _check_register_confirm(context: TurnContext) -> Decision:
 
     # A slip belonging to someone else, or to another conversation, is not a slip this
     # student may confirm.
-    # Mot phieu cua nguoi khac, hoac cua mot hoi thoai khac, thi sinh vien nay khong co quyen
-    # xac nhan.
+    # Một phiếu của người khác, hoặc của một hội thoại khác, thì sinh viên này không có quyền
+    # xác nhận.
     if pending.student_id != context.student_id or pending.session_id != context.session_id:
         return Decision(
             allowed=False,
@@ -268,10 +273,10 @@ def _check_register_confirm(context: TurnContext) -> Decision:
     # also be confirmed by it. Confirmation costs a separate message from the student, and the
     # model has no way to send one on their behalf - so "the student agreed" stops being
     # something the model can simply assert.
-    # Trai tim cua quy tac: mot lenh dang ky duoc chuan bi ngay trong tin nhan nay cua sinh
-    # vien thi khong the duoc xac nhan cung boi chinh tin nhan do. Xac nhan phai tra bang mot
-    # tin nhan rieng cua sinh vien, ma model thi khong co cach nao gui thay - nen "sinh vien
-    # da dong y" khong con la thu model muon khang dinh sao cung duoc.
+    # Trái tim của quy tắc: một lệnh đăng ký được chuẩn bị ngay trong tin nhắn này của sinh
+    # viên thì không thể được xác nhận cũng bởi chính tin nhắn đó. Xác nhận phải trả bằng một
+    # tin nhắn riêng của sinh viên, mà model thì không có cách nào gửi thay - nên "sinh viên
+    # đã đồng ý" không còn là thứ model muốn khẳng định sao cũng được.
     if pending.created_turn_id == context.turn_id:
         return Decision(
             allowed=False,
@@ -287,16 +292,16 @@ def _check_register_confirm(context: TurnContext) -> Decision:
     # The rules are checked again, and this time it is the check that counts. Between the two
     # turns the student may have registered for another class, which can push them over the
     # credit ceiling or into a timetable clash that did not exist when the slip was written.
-    # Cac quy tac duoc kiem tra lai, va lan nay moi la lan kiem tra co hieu luc. Giua hai luot,
-    # sinh vien co the da dang ky them mot lop khac, du de day em vuot tran tin chi hoac roi
-    # vao mot tinh huong trung lich chua he ton tai luc phieu duoc ghi ra.
+    # Các quy tắc được kiểm tra lại, và lần này mới là lần kiểm tra có hiệu lực. Giữa hai lượt,
+    # sinh viên có thể đã đăng ký thêm một lớp khác, đủ để đẩy em vượt trần tín chỉ hoặc rơi
+    # vào một tình huống trùng lịch chưa hề tồn tại lúc phiếu được ghi ra.
     return check_registration_rules(context.target, context)
 
 
 def check_registration_rules(target: ClassSection, context: TurnContext) -> Decision:
     """The six rules that decide whether a student may join a class.
 
-    Sau quy tac quyet dinh sinh vien co duoc vao mot lop hay khong.
+    Sáu quy tắc quyết định sinh viên có được vào một lớp hay không.
     """
     if not context.registration_open:
         return Decision(
@@ -320,9 +325,9 @@ def check_registration_rules(target: ClassSection, context: TurnContext) -> Deci
     # The prerequisite check reads the grade table, not the conversation. A student who says
     # they have already passed the prerequisite, and a model that believes them, change
     # nothing here.
-    # Viec kiem tra tien quyet doc tu bang diem, khong doc tu cuoc hoi thoai. Mot sinh vien
-    # khang dinh minh da dat mon tien quyet, va mot model tin theo loi do, khong lam thay doi
-    # dieu gi o day.
+    # Việc kiểm tra tiên quyết đọc từ bảng điểm, không đọc từ cuộc hội thoại. Một sinh viên
+    # khẳng định mình đã đạt môn tiên quyết, và một model tin theo lời đó, không làm thay đổi
+    # điều gì ở đây.
     missing = sorted(target.prereq_codes - context.passed_courses)
     if missing:
         return Decision(
@@ -350,8 +355,8 @@ def check_registration_rules(target: ClassSection, context: TurnContext) -> Deci
     if clash is not None:
         # Both timetables are spelled out. Naming only one of them reads as if it belonged to
         # the other class, and the model will repeat that confusion back to the student.
-        # Ca hai lich hoc deu duoc noi ro. Neu chi neu mot lich, cau van se doc ra thanh lich
-        # cua lop kia, va model se lap lai dung su nham lan do cho sinh vien nghe.
+        # Cả hai lịch học đều được nói rõ. Nếu chỉ nêu một lịch, câu văn sẽ đọc ra thành lịch
+        # của lớp kia, và model sẽ lặp lại đúng sự nhầm lẫn đó cho sinh viên nghe.
         return Decision(
             allowed=False,
             note=(
@@ -374,6 +379,10 @@ def check_registration_rules(target: ClassSection, context: TurnContext) -> Deci
 
 
 def _find_registered_course(course_code: str, context: TurnContext) -> RegisteredClass | None:
+    """The class already registered under this course code, if any.
+
+    Lớp đã đăng ký thuộc đúng mã học phần này, nếu có.
+    """
     for item in context.registered:
         if item.course_code == course_code:
             return item
@@ -383,15 +392,15 @@ def _find_registered_course(course_code: str, context: TurnContext) -> Registere
 def _find_clash(target: ClassSection, context: TurnContext) -> RegisteredClass | None:
     """The first already-registered class whose timetable overlaps the target's.
 
-    Lop dau tien trong so cac lop da dang ky co lich hoc giao voi lich cua lop dang xet.
+    Lớp đầu tiên trong số các lớp đã đăng ký có lịch học giao với lịch của lớp đang xét.
     """
     for item in context.registered:
         if item.day_of_week != target.day_of_week:
             continue
         # Two period ranges on the same weekday overlap unless one ends before the other
         # begins. Sharing a single period is already a clash.
-        # Hai khoang tiet trong cung mot thu la giao nhau tru khi khoang nay ket thuc truoc
-        # khi khoang kia bat dau. Chi can trung dung mot tiet da la trung lich.
+        # Hai khoảng tiết trong cùng một thứ là giao nhau trừ khi khoảng này kết thúc trước
+        # khi khoảng kia bắt đầu. Chỉ cần trùng đúng một tiết đã là trùng lịch.
         if target.start_period <= item.end_period and item.start_period <= target.end_period:
             return item
     return None
@@ -400,7 +409,7 @@ def _find_clash(target: ClassSection, context: TurnContext) -> RegisteredClass |
 def mask_student_id(student_id: str) -> str:
     """Keep only the last four characters of a student id.
 
-    Chi giu lai bon ky tu cuoi cua ma sinh vien.
+    Chỉ giữ lại bốn ký tự cuối của mã sinh viên.
     """
     value = student_id.strip()
     if len(value) <= 4:

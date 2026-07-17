@@ -1,29 +1,29 @@
 """The tools the agent may call, and their implementations.
 
-Cac tool ma agent duoc phep goi, kem phan cai dat.
+Các tool mà agent được phép gọi, kèm phần cài đặt.
 
 Each tool is declared to Gemini as a function schema; the model reads the descriptions to
 decide which one answers the student's question. The implementations read from PostgreSQL, so
 every number the assistant quotes comes from real data rather than the model's own memory.
-Moi tool duoc khai bao voi Gemini duoi dang function schema; model doc phan mo ta de tu quyet
-dinh goi tool nao. Phan cai dat doc du lieu tu PostgreSQL, nen moi con so ma tro ly dua ra deu
-den tu du lieu that chu khong phai model tu nho.
+Mỗi tool được khai báo với Gemini dưới dạng function schema; model đọc phần mô tả để tự quyết
+định gọi tool nào. Phần cài đặt đọc dữ liệu từ PostgreSQL, nên mọi con số mà trợ lý đưa ra đều
+đến từ dữ liệu thật chứ không phải model tự nhớ.
 
 Registering is split across two tools on purpose. `dang_ky_hoc_phan` writes the request down
 and hands back a slip code; `xac_nhan_dang_ky` is the only one that puts the student in the
 class. The split is what turns "the student agreed" into something the service can check
 rather than something the model can claim - see guardrail.py.
-Viec dang ky duoc tach lam hai tool la co chu dich. `dang_ky_hoc_phan` chi ghi lai nguyen vong
-va tra ve mot ma phieu; `xac_nhan_dang_ky` moi la tool duy nhat dua sinh vien vao lop. Chinh
-viec tach doi nay bien "sinh vien da dong y" thanh thu ma dich vu kiem tra duoc, thay vi thu ma
-model muon noi sao cung duoc - xem guardrail.py.
+Việc đăng ký được tách làm hai tool là có chủ đích. `dang_ky_hoc_phan` chỉ ghi lại nguyện vọng
+và trả về một mã phiếu; `xac_nhan_dang_ky` mới là tool duy nhất đưa sinh viên vào lớp. Chính
+việc tách đôi này biến "sinh viên đã đồng ý" thành thứ mà dịch vụ kiểm tra được, thay vì thứ mà
+model muốn nói sao cũng được - xem guardrail.py.
 
 The tools that read a student's record take no student id. The assistant serves one
 authenticated student per session, so the id comes from the TurnContext. A field the model
 cannot fill in is a field it cannot abuse.
-Cac tool doc ho so sinh vien khong nhan tham so ma sinh vien. Tro ly chi phuc vu dung mot sinh
-vien da xac thuc trong moi phien, nen ma sinh vien lay tu TurnContext. Mot o trong ma model
-khong dien duoc thi cung la mot o trong no khong lam dung sai duoc.
+Các tool đọc hồ sơ sinh viên không nhận tham số mã sinh viên. Trợ lý chỉ phục vụ đúng một sinh
+viên đã xác thực trong mỗi phiên, nên mã sinh viên lấy từ TurnContext. Một ô trống mà model
+không điền được thì cũng là một ô trống nó không lạm dụng sai được.
 """
 
 import secrets
@@ -46,16 +46,16 @@ from app.rag.retriever import Retriever
 # How long the student has to confirm before the prepared registration goes stale. Long enough
 # to read the class details and reply, short enough that a forgotten slip cannot be confirmed
 # by accident hours later.
-# Sinh vien co bao lau de xac nhan truoc khi phieu da chuan bi bi coi la cu. Du dai de doc thong
-# tin lop va tra loi, du ngan de mot phieu bi bo quen khong the bi xac nhan nham sau nhieu gio.
+# Sinh viên có bao lâu để xác nhận trước khi phiếu đã chuẩn bị bị coi là cũ. Đủ dài để đọc thông
+# tin lớp và trả lời, đủ ngắn để một phiếu bị bỏ quên không thể bị xác nhận nhầm sau nhiều giờ.
 CONFIRM_TTL_MINUTES = 10
 
 
 class RegistrationRejected(Exception):
     """A registration that cannot go through. Raised inside the transaction so it rolls back.
 
-    Mot lenh dang ky khong the thuc hien. Duoc nem ra ben trong transaction de transaction tu
-    dong bi huy bo.
+    Một lệnh đăng ký không thể thực hiện. Được ném ra bên trong transaction để transaction tự
+    động bị hủy bỏ.
     """
 
 
@@ -197,23 +197,23 @@ GEMINI_TOOLS = [types.Tool(function_declarations=TOOL_DECLARATIONS)]
 
 
 # Loading the turn context
-# Nap du lieu cho luot hien tai
+# Nạp dữ liệu cho lượt hiện tại
 #
 # Everything the guardrail is allowed to trust is read here, before the model runs. Reading it
 # up front is what lets guardrail.py stay a pure function of its inputs.
-# Moi thu guardrail duoc phep tin deu duoc doc o day, truoc khi model chay. Chinh viec doc san
-# tu dau la thu cho phep guardrail.py van la mot ham thuan tuy cua dau vao.
+# Mọi thứ guardrail được phép tin đều được đọc ở đây, trước khi model chạy. Chính việc đọc sẵn
+# từ đầu là thứ cho phép guardrail.py vẫn là một hàm thuần túy của đầu vào.
 
 
 def load_student(student_id: str) -> dict | None:
     """Read one student's whole record by id, or None if there is no such student.
 
-    Doc toan bo ho so tong quan cua mot sinh vien theo ma, hoac None neu khong co.
+    Đọc toàn bộ hồ sơ tổng quan của một sinh viên theo mã, hoặc None nếu không có.
 
-    Chi SELECT dung cac cot can dung (khong SELECT *) de khong keo ve du lieu thua. Khong
-    can JOIN vi moi thong tin tong quan cua sinh vien deu nam ngay trong bang students.
-    fetchone() tra ve dong dau tien - o day toi da la mot dong vi student_id la khoa chinh -
-    hoac None neu khong khop dong nao.
+    Chỉ SELECT đúng các cột cần dùng (không SELECT *) để không kéo về dữ liệu thừa. Không
+    cần JOIN vì mọi thông tin tổng quan của sinh viên đều nằm ngay trong bảng students.
+    fetchone() trả về dòng đầu tiên - ở đây tối đa là một dòng vì student_id là khóa chính -
+    hoặc None nếu không khớp dòng nào.
     """
     with get_connection() as conn:
         return conn.execute(
@@ -230,31 +230,31 @@ def load_student(student_id: str) -> dict | None:
 # is what the confirmation transaction calls - because a fact re-read on a *different* connection
 # would be read outside the transaction, would not see the locks that transaction holds, and so
 # would be exactly the stale fact the lock was taken to avoid.
-# Moi ham duoi day co hai dang, va do la co y. Dang cong khai tu mo ket noi rieng, va la dang ma
-# agent goi truoc khi model chay. Dang rieng tu thi nhan mot ket noi duoc dua cho, va la dang ma
-# transaction xac nhan goi - boi mot su that doc lai tren mot ket noi KHAC thi se duoc doc ben
-# ngoai transaction, se khong nhin thay cac khoa ma transaction do dang giu, va vi vay se dung la
-# cai su that cu ky ma cai khoa sinh ra de tranh.
+# Mỗi hàm dưới đây có hai dạng, và đó là cố ý. Dạng công khai tự mở kết nối riêng, và là dạng mà
+# agent gọi trước khi model chạy. Dạng riêng tư thì nhận một kết nối được đưa cho, và là dạng mà
+# transaction xác nhận gọi - bởi một sự thật đọc lại trên một kết nối KHÁC thì sẽ được đọc bên
+# ngoài transaction, sẽ không nhìn thấy các khóa mà transaction đó đang giữ, và vì vậy sẽ đúng là
+# cái sự thật cũ kỹ mà cái khóa sinh ra để tránh.
 
 
 def load_passed_courses(student_id: str) -> frozenset[str]:
     """The courses this student has actually passed, straight from the grade table.
 
-    Cac hoc phan sinh vien nay thuc su da dat, lay thang tu bang diem.
+    Các học phần sinh viên này thực sự đã đạt, lấy thẳng từ bảng điểm.
 
     This is the only answer to "have I done the prerequisite" that the service accepts. What
     the student says, and what the model believes them, do not enter into it.
-    Day la cau tra loi duy nhat cho cau hoi "em da hoc mon tien quyet chua" ma dich vu chap
-    nhan. Sinh vien noi gi, va model co tin theo hay khong, khong lien quan gi o day.
+    Đây là câu trả lời duy nhất cho câu hỏi "em đã học môn tiên quyết chưa" mà dịch vụ chấp
+    nhận. Sinh viên nói gì, và model có tin theo hay không, không liên quan gì ở đây.
     """
     with get_connection() as conn:
         return _passed_courses(conn, student_id)
 
 
 def _passed_courses(conn, student_id: str) -> frozenset[str]:
-    # Lay ma cac mon sinh vien da DAT (cot passed = true trong bang grades). Tra ve mot
-    # frozenset de guardrail so sanh nhanh "tap mon da dat" voi "tap mon tien quyet" bang
-    # phep tru tap hop (xem check_registration_rules trong guardrail.py).
+    # Lấy mã các môn sinh viên đã ĐẠT (cột passed = true trong bảng grades). Trả về một
+    # frozenset để guardrail so sánh nhanh "tập môn đã đạt" với "tập môn tiên quyết" bằng
+    # phép trừ tập hợp (xem check_registration_rules trong guardrail.py).
     rows = conn.execute(
         "SELECT course_code FROM grades WHERE student_id = %s AND passed",
         (student_id,),
@@ -268,12 +268,12 @@ def load_registered(student_id: str, semester: str) -> tuple[RegisteredClass, ..
 
 
 def _registered(conn, student_id: str, semester: str) -> tuple[RegisteredClass, ...]:
-    # Danh sach cac lop sinh vien da dang ky trong hoc ky. Ghep ba bang lai voi nhau:
-    #   enrollments (e)     -> sinh vien nay da ghi danh vao nhung lop nao
-    #   class_sections (s)  -> lay lich hoc cua tung lop (thu, tiet bat dau, tiet ket thuc)
-    #   courses (c)         -> lay ten mon va so tin chi
-    # Loc theo dung sinh vien va dung hoc ky, sap xep theo thu roi theo tiet cho de doc.
-    # Guardrail dung ket qua nay de kiem tra trung lich va cong don tong tin chi da dang ky.
+    # Danh sách các lớp sinh viên đã đăng ký trong học kỳ. Ghép ba bảng lại với nhau:
+    #   enrollments (e)     -> sinh viên này đã ghi danh vào những lớp nào
+    #   class_sections (s)  -> lấy lịch học của từng lớp (thứ, tiết bắt đầu, tiết kết thúc)
+    #   courses (c)         -> lấy tên môn và số tín chỉ
+    # Lọc theo đúng sinh viên và đúng học kỳ, sắp xếp theo thứ rồi theo tiết cho dễ đọc.
+    # Guardrail dùng kết quả này để kiểm tra trùng lịch và cộng dồn tổng tín chỉ đã đăng ký.
     rows = conn.execute(
         """
         SELECT s.id, e.course_code, c.course_name, c.credits,
@@ -304,22 +304,22 @@ def _registered(conn, student_id: str, semester: str) -> tuple[RegisteredClass, 
 def is_registration_open(semester: str) -> bool:
     """Whether registration is open right now, as decided by the database clock.
 
-    Dang ky hoc phan co dang mo hay khong, do dong ho cua database quyet dinh.
+    Đăng ký học phần có đang mở hay không, do đồng hồ của database quyết định.
 
     The comparison is made by PostgreSQL rather than by the application so a clock skew
     between the two cannot reopen a window that has already closed.
-    Phep so sanh do PostgreSQL thuc hien chu khong phai ung dung, de lech dong ho giua hai ben
-    khong the mo lai mot dot dang ky von da dong.
+    Phép so sánh do PostgreSQL thực hiện chứ không phải ứng dụng, để lệch đồng hồ giữa hai bên
+    không thể mở lại một đợt đăng ký vốn đã đóng.
     """
     with get_connection() as conn:
         return _registration_open(conn, semester)
 
 
 def _registration_open(conn, semester: str) -> bool:
-    # Hoi thang PostgreSQL xem thoi diem "bay gio" (now()) co nam trong khoang mo dang ky cua
-    # hoc ky hay khong. Phep so sanh dat o phia database, khong phai o phia ung dung, de neu
-    # dong ho hai ben lech nhau thi cung khong the mo lai mot dot dang ky da dong.
-    # row co the la None (khong co dong nao cho hoc ky nay) -> khi do coi nhu dang ky khong mo.
+    # Hỏi thẳng PostgreSQL xem thời điểm "bây giờ" (now()) có nằm trong khoảng mở đăng ký của
+    # học kỳ hay không. Phép so sánh đặt ở phía database, không phải ở phía ứng dụng, để nếu
+    # đồng hồ hai bên lệch nhau thì cũng không thể mở lại một đợt đăng ký đã đóng.
+    # row có thể là None (không có dòng nào cho học kỳ này) -> khi đó coi như đăng ký không mở.
     row = conn.execute(
         """
         SELECT (now() BETWEEN opens_at AND closes_at) AS is_open
@@ -333,14 +333,14 @@ def _registration_open(conn, semester: str) -> bool:
 def load_class_section(section_id: int, semester: str) -> ClassSection | None:
     """Load one class section and everything the rules need to judge it.
 
-    Nap mot lop hoc phan kem moi thu ma cac quy tac can de phan xu no.
+    Nạp một lớp học phần kèm mọi thứ mà các quy tắc cần để phân xử nó.
 
-    Doc bang HAI truy van thay vi mot:
-      1. Ghep class_sections voi courses de lay lich hoc, si so, ten mon, so tin chi.
-         Neu khong tim thay lop (sai ma hoac sai hoc ky) thi tra ve None ngay.
-      2. Lay danh sach mon tien quyet cua mon nay tu bang prerequisites.
-    Tach lam hai la de tranh JOIN nhan ban dong: mot mon co N mon tien quyet se lam truy van
-    ghep tra ve N dong trung lap thong tin lop. O day thong tin lop chi can dung mot dong.
+    Đọc bằng HAI truy vấn thay vì một:
+      1. Ghép class_sections với courses để lấy lịch học, sĩ số, tên môn, số tín chỉ.
+         Nếu không tìm thấy lớp (sai mã hoặc sai học kỳ) thì trả về None ngay.
+      2. Lấy danh sách môn tiên quyết của môn này từ bảng prerequisites.
+    Tách làm hai là để tránh JOIN nhân bản dòng: một môn có N môn tiên quyết sẽ làm truy vấn
+    ghép trả về N dòng trùng lặp thông tin lớp. Ở đây thông tin lớp chỉ cần đúng một dòng.
     """
     with get_connection() as conn:
         row = conn.execute(
@@ -356,7 +356,7 @@ def load_class_section(section_id: int, semester: str) -> ClassSection | None:
         if row is None:
             return None
 
-        # Danh sach ma mon tien quyet cua mon nay, doc rieng roi gom thanh frozenset ben duoi.
+        # Danh sách mã môn tiên quyết của môn này, đọc riêng rồi gom thành frozenset bên dưới.
         prereqs = conn.execute(
             "SELECT prereq_code FROM prerequisites WHERE course_code = %s",
             (row["course_code"],),
@@ -380,7 +380,7 @@ def load_class_section(section_id: int, semester: str) -> ClassSection | None:
 def load_pending_registration(slip_id: str) -> PendingRegistration | None:
     """Read a prepared registration, letting PostgreSQL decide whether it has expired.
 
-    Doc mot phieu dang ky da chuan bi, de PostgreSQL tu quyet dinh no het han hay chua.
+    Đọc một phiếu đăng ký đã chuẩn bị, để PostgreSQL tự quyết định nó hết hạn hay chưa.
     """
     with get_connection() as conn:
         row = conn.execute(
@@ -408,12 +408,12 @@ class ToolExecutor:
     def execute(self, tool_name: str, arguments: dict, context: TurnContext) -> dict:
         """Route a tool name to its handler and run it. Only called after the guardrail allows it.
 
-        Dieu huong mot ten tool toi dung handler cua no roi chay. Chi duoc goi sau khi guardrail
-        da cho phep (xem loop.py:_handle_tool_call).
+        Điều hướng một tên tool tới đúng handler của nó rồi chạy. Chỉ được gọi sau khi guardrail
+        đã cho phép (xem loop.py:_handle_tool_call).
 
-        Dung mot bang tra cuu (dict ten tool -> ham xu ly) thay vi mot chuoi if/elif dai. Moi
-        ham xu ly deu nhan cung bo tham so (arguments, context) va tra ve mot dict se duoc nap
-        nguoc lai cho model duoi dang ket qua tool.
+        Dùng một bảng tra cứu (dict tên tool -> hàm xử lý) thay vì một chuỗi if/elif dài. Mọi
+        hàm xử lý đều nhận cùng bộ tham số (arguments, context) và trả về một dict sẽ được nạp
+        ngược lại cho model dưới dạng kết quả tool.
         """
         handlers = {
             "tim_kiem_quy_che": self._tim_kiem_quy_che,
@@ -430,12 +430,12 @@ class ToolExecutor:
         return handler(arguments, context)
 
     def _tim_kiem_quy_che(self, arguments: dict, context: TurnContext) -> dict:
-        """RAG: tim cac doan tai lieu lien quan nhat toi cau hoi, kem nguon trich dan.
+        """RAG: tìm các đoạn tài liệu liên quan nhất tới câu hỏi, kèm nguồn trích dẫn.
 
-        Day la buoc "R" (Retrieval) cua RAG. Lay cau hoi model dua ra, goi Retriever de tim
-        top_k doan giong nhat trong kho tri thuc, roi tra ve noi dung kem tieu de va nguon.
-        Neu khong tim thay gi, tra ve ghi chu bao model phai noi thang la khong co thong tin,
-        tuyet doi khong duoc bia. Chinh phan "nguon" giup model trich dan lai cho sinh vien.
+        Đây là bước "R" (Retrieval) của RAG. Lấy câu hỏi model đưa ra, gọi Retriever để tìm
+        top_k đoạn giống nhất trong kho tri thức, rồi trả về nội dung kèm tiêu đề và nguồn.
+        Nếu không tìm thấy gì, trả về ghi chú báo model phải nói thẳng là không có thông tin,
+        tuyệt đối không được bịa. Chính phần "nguồn" giúp model trích dẫn lại cho sinh viên.
         """
         query = str(arguments.get("cau_hoi", "")).strip()
         if not query:
@@ -457,19 +457,19 @@ class ToolExecutor:
     def _tim_lop_hoc_phan(self, arguments: dict, context: TurnContext) -> dict:
         """List open class sections for a course (or all courses), with schedule and prerequisites.
 
-        Liet ke cac lop hoc phan dang mo cua mot mon (hoac tat ca mon), kem lich hoc va mon tien
-        quyet. Model dung tool nay de lay ma_lop truoc khi goi dang_ky_hoc_phan.
+        Liệt kê các lớp học phần đang mở của một môn (hoặc tất cả môn), kèm lịch học và môn tiên
+        quyết. Model dùng tool này để lấy ma_lop trước khi gọi dang_ky_hoc_phan.
 
-        Chuan hoa ma mon ve chu HOA de "int3401" va "INT3401" deu khop. Neu co ma_mon thi loc
-        theo mon do, neu bo trong thi liet ke moi lop dang mo trong hoc ky. Sau khi lay danh
-        sach lop, doc them mon tien quyet cua tat ca cac mon trong ket qua bang MOT truy van
-        (dung ANY(%s)) roi gom lai theo mon, tranh goi database lap di lap lai cho tung mon.
+        Chuẩn hóa mã môn về chữ HOA để "int3401" và "INT3401" đều khớp. Nếu có ma_mon thì lọc
+        theo môn đó, nếu bỏ trống thì liệt kê mọi lớp đang mở trong học kỳ. Sau khi lấy danh
+        sách lớp, đọc thêm môn tiên quyết của tất cả các môn trong kết quả bằng MỘT truy vấn
+        (dùng ANY(%s)) rồi gom lại theo môn, tránh gọi database lặp đi lặp lại cho từng môn.
         """
         course_code = str(arguments.get("ma_mon") or "").strip().upper()
 
         with get_connection() as conn:
             if course_code:
-                # Nhanh 1: chi lay cac lop cua dung mot mon. JOIN courses de kem ten mon va tin chi.
+                # Nhánh 1: chỉ lấy các lớp của đúng một môn. JOIN courses để kèm tên môn và tín chỉ.
                 rows = conn.execute(
                     """
                     SELECT s.id, s.course_code, c.course_name, c.credits, s.section_no,
@@ -483,7 +483,7 @@ class ToolExecutor:
                     (self._semester, course_code),
                 ).fetchall()
             else:
-                # Nhanh 2: khong loc theo mon, lay het moi lop dang mo trong hoc ky.
+                # Nhánh 2: không lọc theo môn, lấy hết mọi lớp đang mở trong học kỳ.
                 rows = conn.execute(
                     """
                     SELECT s.id, s.course_code, c.course_name, c.credits, s.section_no,
@@ -507,9 +507,9 @@ class ToolExecutor:
                     )
                 }
 
-            # Lay mon tien quyet cho tat ca cac mon co trong ket qua chi bang mot truy van.
-            # ANY(%s) nhan mot danh sach ma mon va khop bat ky ma nao trong danh sach do, thay
-            # cho viec chay mot truy van rieng cho tung mon (tranh loi "N+1 query").
+            # Lấy môn tiên quyết cho tất cả các môn có trong kết quả chỉ bằng một truy vấn.
+            # ANY(%s) nhận một danh sách mã môn và khớp bất kỳ mã nào trong danh sách đó, thay
+            # cho việc chạy một truy vấn riêng cho từng môn (tránh lỗi "N+1 query").
             prereq_rows = conn.execute(
                 """
                 SELECT course_code, prereq_code FROM prerequisites
@@ -518,8 +518,8 @@ class ToolExecutor:
                 ([row["course_code"] for row in rows],),
             ).fetchall()
 
-        # Gom cac dong (mon, mon_tien_quyet) thanh dict: mon -> [danh sach mon tien quyet].
-        # setdefault tao san list rong cho lan gap mon do dau tien roi moi append vao.
+        # Gom các dòng (môn, môn_tiên_quyết) thành dict: môn -> [danh sách môn tiên quyết].
+        # setdefault tạo sẵn list rỗng cho lần gặp môn đó đầu tiên rồi mới append vào.
         prereqs: dict[str, list[str]] = {}
         for row in prereq_rows:
             prereqs.setdefault(row["course_code"], []).append(row["prereq_code"])
@@ -549,13 +549,13 @@ class ToolExecutor:
     def _tra_cuu_bang_diem(self, arguments: dict, context: TurnContext) -> dict:
         """Look up the student's transcript, optionally filtered to one semester.
 
-        Tra cuu bang diem cua sinh vien, co the loc theo mot hoc ky.
+        Tra cứu bảng điểm của sinh viên, có thể lọc theo một học kỳ.
 
-        Chu y: ma sinh vien lay tu context.student_id (tu token da xac thuc), KHONG lay tu
-        tham so cua model - nen model khong the doc bang diem cua nguoi khac. JOIN grades voi
-        courses de moi dong diem co kem ten mon va so tin chi. Diem chu (letter_grade) va ket
-        qua dat/khong dat duoc tinh o tang Python bang chung mot module grading.py, de con so
-        tro ly doc ra luon khop voi quy che.
+        Chú ý: mã sinh viên lấy từ context.student_id (từ token đã xác thực), KHÔNG lấy từ
+        tham số của model - nên model không thể đọc bảng điểm của người khác. JOIN grades với
+        courses để mỗi dòng điểm có kèm tên môn và số tín chỉ. Điểm chữ (letter_grade) và kết
+        quả đạt/không đạt được tính ở tầng Python bằng chung một module grading.py, để con số
+        trợ lý đọc ra luôn khớp với quy chế.
         """
         semester = str(arguments.get("hoc_ky") or "").strip()
 
@@ -605,20 +605,20 @@ class ToolExecutor:
     def _tra_cuu_tien_do_hoc_tap(self, arguments: dict, context: TurnContext) -> dict:
         """Overview of the student's progress: GPA, credits, status, ceiling, courses still owed.
 
-        Tong quan tien do hoc tap: GPA, tin chi, tinh trang hoc vu, tran tin chi, va cac mon
-        bat buoc con thieu. Gop du lieu tu ba nguon: ho so sinh vien (load_student), tran tin
-        chi va cac lop da dang ky (co san trong context), va truy van "mon bat buoc con thieu"
-        ben duoi.
+        Tổng quan tiến độ học tập: GPA, tín chỉ, tình trạng học vụ, trần tín chỉ, và các môn
+        bắt buộc còn thiếu. Gộp dữ liệu từ ba nguồn: hồ sơ sinh viên (load_student), trần tín
+        chỉ và các lớp đã đăng ký (có sẵn trong context), và truy vấn "môn bắt buộc còn thiếu"
+        bên dưới.
         """
         student = load_student(context.student_id)
         if student is None:
             return {"loi": "Khong tim thay sinh vien."}
 
         with get_connection() as conn:
-            # Cac mon BAT BUOC (is_required) ma sinh vien CHUA dat.
-            # Cach doc: lay moi mon bat buoc, roi loai bo nhung mon da nam trong tap "cac mon
-            # sinh vien da dat" - chinh la truy van con NOT IN (SELECT ... WHERE passed).
-            # Ket qua la danh sach mon bat buoc con no lai, dung de nhac sinh vien can hoc them.
+            # Các môn BẮT BUỘC (is_required) mà sinh viên CHƯA đạt.
+            # Cách đọc: lấy mọi môn bắt buộc, rồi loại bỏ những môn đã nằm trong tập "các môn
+            # sinh viên đã đạt" - chính là truy vấn con NOT IN (SELECT ... WHERE passed).
+            # Kết quả là danh sách môn bắt buộc còn nợ lại, dùng để nhắc sinh viên cần học thêm.
             missing = conn.execute(
                 """
                 SELECT c.course_code, c.course_name, c.credits
@@ -669,14 +669,14 @@ class ToolExecutor:
     def _tinh_gpa_du_kien(self, arguments: dict, context: TurnContext) -> dict:
         """Recompute the GPA as if the student scored the given marks in the given courses.
 
-        Tinh lai GPA nhu the sinh vien dat cac muc diem gia dinh o cac hoc phan da neu.
+        Tính lại GPA như thể sinh viên đạt các mức điểm giả định ở các học phần đã nêu.
 
         A repeated course replaces the earlier attempt rather than being added alongside it,
         which is what the regulation says about retaking a course. Adding it twice would let a
         student "improve" their GPA by simply retaking a course they had already passed well.
-        Mot hoc phan hoc lai se thay the lan hoc truoc chu khong duoc cong them ben canh, dung
-        nhu quy che quy dinh ve hoc lai. Neu cong ca hai lan, sinh vien co the "cai thien" GPA
-        chi bang cach hoc lai mot mon von da dat diem cao.
+        Một học phần học lại sẽ thay thế lần học trước chứ không được cộng thêm bên cạnh, đúng
+        như quy chế quy định về học lại. Nếu cộng cả hai lần, sinh viên có thể "cải thiện" GPA
+        chỉ bằng cách học lại một môn vốn đã đạt điểm cao.
         """
         assumed = arguments.get("du_kien") or []
         if not isinstance(assumed, list) or not assumed:
@@ -694,10 +694,10 @@ class ToolExecutor:
             ).fetchall()
             credit_rows = conn.execute("SELECT course_code, credits FROM courses").fetchall()
 
-        # credits_of: ma mon -> so tin chi, dung de tra nhanh trong so khi tinh GPA.
-        # scores: ma mon -> diem hien tai. Khoi tao tu bang diem that. O vong lap ben duoi,
-        # gan scores[code] = score se GHI DE diem cu neu mon do da co - dung la cach quy che
-        # xu ly hoc lai (lay diem lan sau, khong cong them lan truoc).
+        # credits_of: mã môn -> số tín chỉ, dùng để tra nhanh trọng số khi tính GPA.
+        # scores: mã môn -> điểm hiện tại. Khởi tạo từ bảng điểm thật. Ở vòng lặp bên dưới,
+        # gán scores[code] = score sẽ GHI ĐÈ điểm cũ nếu môn đó đã có - đúng là cách quy chế
+        # xử lý học lại (lấy điểm lần sau, không cộng thêm lần trước).
         credits_of = {row["course_code"]: row["credits"] for row in credit_rows}
         scores: dict[str, Decimal] = {row["course_code"]: row["score"] for row in current}
 
@@ -729,8 +729,8 @@ class ToolExecutor:
         if not applied:
             return {"loi": "Thieu danh sach hoc phan va diem du kien."}
 
-        # Hai tap (diem, tin chi) de dua vao compute_gpa: mot tap theo diem hien tai, mot tap
-        # theo diem sau khi da ap cac diem gia dinh (scores da bao gom cac diem ghi de o tren).
+        # Hai tập (điểm, tín chỉ) để đưa vào compute_gpa: một tập theo điểm hiện tại, một tập
+        # theo điểm sau khi đã áp các điểm giả định (scores đã bao gồm các điểm ghi đè ở trên).
         current_entries = [(row["score"], credits_of[row["course_code"]]) for row in current]
         projected_entries = [(score, credits_of[code]) for code, score in scores.items()]
 
@@ -750,8 +750,8 @@ class ToolExecutor:
     def _dang_ky_hoc_phan(self, arguments: dict, context: TurnContext) -> dict:
         """Step one: write the request down and hand back a slip. Nobody is enrolled here.
 
-        Buoc mot: ghi lai nguyen vong dang ky va tra ve mot ma phieu. Chua ai duoc ghi danh o
-        buoc nay.
+        Bước một: ghi lại nguyện vọng đăng ký và trả về một mã phiếu. Chưa ai được ghi danh ở
+        bước này.
         """
         target = context.target
         if target is None:
@@ -765,8 +765,8 @@ class ToolExecutor:
             # The code is unguessable on purpose: it is the token the student's next message is
             # matched against, so it must not be possible to guess someone else's pending slip
             # into existence.
-            # Ma phieu co y kho doan: no la ma ma tin nhan tiep theo cua sinh vien se doi chieu
-            # vao, nen khong duoc phep doan mo ra phieu cho cua nguoi khac.
+            # Mã phiếu cố ý khó đoán: nó là mã mà tin nhắn tiếp theo của sinh viên sẽ đối chiếu
+            # vào, nên không được phép đoán mò ra phiếu chờ của người khác.
             slip_id = f"DK{secrets.token_hex(3).upper()}"
 
             conn.execute(
@@ -809,16 +809,16 @@ class ToolExecutor:
     def _xac_nhan_dang_ky(self, arguments: dict, context: TurnContext) -> dict:
         """Step two: carry out a registration the student confirmed. The class fills up here.
 
-        Buoc hai: thuc hien lenh dang ky sinh vien da xac nhan. Lop day len o day.
+        Bước hai: thực hiện lệnh đăng ký sinh viên đã xác nhận. Lớp đầy lên ở đây.
 
         The guardrail has already approved this call, but nothing here trusts that: the slip is
         claimed again under lock and the seat is counted again under lock. The guardrail read
         the seat count a moment ago, outside any transaction, and by now another student may
         have taken the last seat.
-        Guardrail da duyet loi goi nay, nhung o day khong tin vao dieu do: phieu duoc gianh lai
-        mot lan nua trong trang thai khoa, va cho ngoi cung duoc dem lai trong trang thai khoa.
-        Guardrail doc si so tu mot luc truoc, ben ngoai moi transaction, va den gio nay mot sinh
-        vien khac hoan toan co the da lay mat cho cuoi cung.
+        Guardrail đã duyệt lời gọi này, nhưng ở đây không tin vào điều đó: phiếu được giành lại
+        một lần nữa trong trạng thái khóa, và chỗ ngồi cũng được đếm lại trong trạng thái khóa.
+        Guardrail đọc sĩ số từ một lúc trước, bên ngoài mọi transaction, và đến giờ này một sinh
+        viên khác hoàn toàn có thể đã lấy mất chỗ cuối cùng.
         """
         slip_id = str(arguments.get("ma_phieu", "")).strip()
 
@@ -829,15 +829,15 @@ class ToolExecutor:
         except RegistrationRejected as rejection:
             # Raised inside the transaction, so PostgreSQL has rolled everything back, including
             # the slip we had marked as executed. It goes back to waiting.
-            # Duoc nem ra ben trong transaction, nen PostgreSQL da huy bo toan bo, ke ca dong
-            # phieu vua bi danh dau la da thuc hien. No quay lai trang thai cho.
+            # Được ném ra bên trong transaction, nên PostgreSQL đã hủy bỏ toàn bộ, kể cả dòng
+            # phiếu vừa bị đánh dấu là đã thực hiện. Nó quay lại trạng thái chờ.
             return {"loi": str(rejection)}
 
 
 def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     """Enrol the student named on the slip, or refuse. Runs inside a transaction.
 
-    Ghi danh sinh vien ghi tren phieu, hoac tu choi. Chay ben trong mot transaction.
+    Ghi danh sinh viên ghi trên phiếu, hoặc từ chối. Chạy bên trong một transaction.
 
     The guardrail has already approved this call, and none of that approval is trusted here. It
     was made against facts read at the start of the turn, on another connection, outside every
@@ -847,25 +847,25 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     So the six rules are run again, here, over facts re-read under lock. This is the run that
     counts; the earlier one only existed to tell the student early.
 
-    Guardrail da duyet loi goi nay, va o day khong tin vao su phe duyet do chut nao. No duoc dua
-    ra dua tren nhung su that doc tu dau luot, tren mot ket noi khac, ben ngoai moi transaction.
-    Tu luc do den gio, mot lenh xac nhan khac hoan toan co the da di qua - cua chinh sinh vien
-    nay, hoac vao chinh lop nay - va moi su that kia deu co the da doi.
+    Guardrail đã duyệt lời gọi này, và ở đây không tin vào sự phê duyệt đó chút nào. Nó được đưa
+    ra dựa trên những sự thật đọc từ đầu lượt, trên một kết nối khác, bên ngoài mọi transaction.
+    Từ lúc đó đến giờ, một lệnh xác nhận khác hoàn toàn có thể đã đi qua - của chính sinh viên
+    này, hoặc vào chính lớp này - và mọi sự thật kia đều có thể đã đổi.
 
-    Vi vay sau quy tac duoc chay lai, tai day, tren nhung su that doc lai duoi khoa. Day moi la
-    lan chay co hieu luc; lan truoc do chi ton tai de bao som cho sinh vien.
+    Vì vậy sáu quy tắc được chạy lại, tại đây, trên những sự thật đọc lại dưới khóa. Đây mới là
+    lần chạy có hiệu lực; lần trước đó chỉ tồn tại để báo sớm cho sinh viên.
 
     Exposed at module level rather than kept as a method so the concurrency test can fire it
     from many threads at once without standing up an agent.
-    Ham nay dat o cap module thay vi la mot method, de bai test tranh chap dong thoi co the goi
-    thang no tu nhieu luong cung luc ma khong can dung len ca mot agent.
+    Hàm này đặt ở cấp module thay vì là một method, để bài test tranh chấp đồng thời có thể gọi
+    thẳng nó từ nhiều luồng cùng lúc mà không cần dựng lên cả một agent.
     """
     # Claim the slip by flipping its status, and only proceed if this statement is the one that
     # flipped it. A second confirmation of the same code - whether from a retried request or
     # from the model calling the tool twice - updates no rows and enrols nobody.
-    # Gianh lay phieu bang cach lat trang thai cua no, va chi di tiep neu chinh cau lenh nay la
-    # cau da lat duoc. Mot lan xac nhan thu hai tren cung ma phieu, du den tu request bi gui lai
-    # hay tu viec model goi tool hai lan, se khong cap nhat dong nao va khong ghi danh ai ca.
+    # Giành lấy phiếu bằng cách lật trạng thái của nó, và chỉ đi tiếp nếu chính câu lệnh này là
+    # câu đã lật được. Một lần xác nhận thứ hai trên cùng mã phiếu, dù đến từ request bị gửi lại
+    # hay từ việc model gọi tool hai lần, sẽ không cập nhật dòng nào và không ghi danh ai cả.
     claimed = conn.execute(
         """
         UPDATE pending_registrations
@@ -898,23 +898,23 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     # it, so the enrolments read below are the enrolments as of now, not as of the start of the
     # turn.
     #
-    # Khoa dong SINH VIEN, truoc khi doc bat cu thu gi khac ve sinh vien nay.
+    # Khóa dòng SINH VIÊN, trước khi đọc bất cứ thứ gì khác về sinh viên này.
     #
-    # Day la cai khoa bit lai lo hong ma khoa lop khong bao gio cham toi. Khoa lop bao ve si so,
-    # von bi tranh chap giua NHUNG sinh vien khac nhau. Nhung tran tin chi va viec trung lich lai
-    # la thuoc tinh cua tap cac lop cua MOT sinh vien, va chung bi tranh chap khi chinh sinh vien
-    # do xac nhan hai phieu cung luc - hai tab trinh duyet, mot request bi gui lai, hay mot model
-    # goi ca hai lenh xac nhan trong cung mot cau tra loi. Ca hai deu se doc cung mot danh sach lop
-    # cu ky, ca hai deu thay con cho duoi tran, va ca hai deu di qua, de lai sinh vien trong hai
-    # lop trung lich nhau hoac vuot tran tin chi.
+    # Đây là cái khóa bịt lại lỗ hổng mà khóa lớp không bao giờ chạm tới. Khóa lớp bảo vệ sĩ số,
+    # vốn bị tranh chấp giữa NHỮNG sinh viên khác nhau. Nhưng trần tín chỉ và việc trùng lịch lại
+    # là thuộc tính của tập các lớp của MỘT sinh viên, và chúng bị tranh chấp khi chính sinh viên
+    # đó xác nhận hai phiếu cùng lúc - hai tab trình duyệt, một request bị gửi lại, hay một model
+    # gọi cả hai lệnh xác nhận trong cùng một câu trả lời. Cả hai đều sẽ đọc cùng một danh sách lớp
+    # cũ kỹ, cả hai đều thấy còn chỗ dưới trần, và cả hai đều đi qua, để lại sinh viên trong hai
+    # lớp trùng lịch nhau hoặc vượt trần tín chỉ.
     #
-    # Giu dong nay khien moi lenh xac nhan cua sinh vien nay phai xep hang sau lenh dang chay, nen
-    # danh sach lop doc o duoi la danh sach tai thoi diem nay, khong phai tu dau luot.
+    # Giữ dòng này khiến mọi lệnh xác nhận của sinh viên này phải xếp hàng sau lệnh đang chạy, nên
+    # danh sách lớp đọc ở dưới là danh sách tại thời điểm này, không phải từ đầu lượt.
     #
     # The order matters and is fixed everywhere: student first, then class. Two transactions that
     # took them in opposite orders would sooner or later wait on each other for ever.
-    # Thu tu khoa la quan trong va duoc co dinh o khap noi: sinh vien truoc, lop sau. Hai
-    # transaction lay hai khoa nay theo hai thu tu nguoc nhau thi som muon cung se cho nhau mai mai.
+    # Thứ tự khóa là quan trọng và được cố định ở khắp nơi: sinh viên trước, lớp sau. Hai
+    # transaction lấy hai khóa này theo hai thứ tự ngược nhau thì sớm muộn cũng sẽ chờ nhau mãi mãi.
     student = conn.execute(
         "SELECT student_id, academic_status FROM students WHERE student_id = %s FOR UPDATE",
         (student_id,),
@@ -935,17 +935,17 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     # "the class is full, please pick another one". Correctness and a usable answer are two
     # different problems, and they are solved by two different lines of defence.
     #
-    # Khoa dong cua lop. Moi lenh xac nhan khac vao cung lop nay tu gio phai xep hang sau cau
-    # lenh nay, nen si so doc o duoi khong the doi ngay duoi chan ta trong khoang giua luc doc
-    # va luc hanh dong.
+    # Khóa dòng của lớp. Mọi lệnh xác nhận khác vào cùng lớp này từ giờ phải xếp hàng sau câu
+    # lệnh này, nên sĩ số đọc ở dưới không thể đổi ngay dưới chân ta trong khoảng giữa lúc đọc
+    # và lúc hành động.
     #
-    # Cai khoa nay khong phai la thu giu cho du lieu dung - rang buoc CHECK tren class_sections
-    # da lam viec do roi, va dieu nay da duoc do that: khi bo khoa di, 19 tren 20 lenh xac nhan
-    # dong thoi van that bai, nhung chung that bai duoi dang CheckViolation do PostgreSQL nem
-    # ra. Thu ma cai khoa mua ve la *chat luong cua loi tu choi*. Khong co no, 19 sinh vien nhan
-    # mot loi rang buoc tho, lo ra ngoai thanh "tool bi loi"; co no, ho nhan duoc cau "lop da du
-    # si so, em chon lop khac nhe". Du lieu dung va cau tra loi dung la hai bai toan khac nhau,
-    # va chung duoc giai bang hai lop phong thu khac nhau.
+    # Cái khóa này không phải là thứ giữ cho dữ liệu đúng - ràng buộc CHECK trên class_sections
+    # đã làm việc đó rồi, và điều này đã được đo thật: khi bỏ khóa đi, 19 trên 20 lệnh xác nhận
+    # đồng thời vẫn thất bại, nhưng chúng thất bại dưới dạng CheckViolation do PostgreSQL ném
+    # ra. Thứ mà cái khóa mua về là *chất lượng của lời từ chối*. Không có nó, 19 sinh viên nhận
+    # một lỗi ràng buộc thô, lộ ra ngoài thành "tool bị lỗi"; có nó, họ nhận được câu "lớp đã đủ
+    # sĩ số, em chọn lớp khác nhé". Dữ liệu đúng và câu trả lời đúng là hai bài toán khác nhau,
+    # và chúng được giải bằng hai lớp phòng thủ khác nhau.
     section = conn.execute(
         """
         SELECT s.id, s.course_code, c.course_name, s.section_no, c.credits, s.semester,
@@ -987,10 +987,10 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     # function the guardrail used is run again over it - the rules are not restated here, because
     # two copies of six rules would eventually disagree, and the copy that disagreed silently
     # would be the one guarding the write.
-    # Dung lai hoan toan tu nhung gi transaction nay nhin thay, khi dang giu ca hai khoa. Chinh
-    # dung ham thuan ma guardrail da dung se duoc chay lai tren no - cac quy tac khong duoc viet
-    # lai o day, boi hai ban sao cua sau quy tac roi se co luc lech nhau, va ban sao lech mot cach
-    # am tham se dung la ban dang canh lenh ghi.
+    # Dựng lại hoàn toàn từ những gì transaction này nhìn thấy, khi đang giữ cả hai khóa. Chính
+    # đúng hàm thuần mà guardrail đã dùng sẽ được chạy lại trên nó - các quy tắc không được viết
+    # lại ở đây, bởi hai bản sao của sáu quy tắc rồi sẽ có lúc lệch nhau, và bản sao lệch một cách
+    # âm thầm sẽ đúng là bản đang canh lệnh ghi.
     fresh = TurnContext(
         student_id=student_id,
         session_id=claimed["session_id"],
@@ -1008,6 +1008,10 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
     if not decision.allowed:
         raise RegistrationRejected(decision.note or "Lenh dang ky bi tu choi.")
 
+    # Both writes happen while still holding both locks: add the enrolment row, then bump the
+    # seat count that the CHECK constraint watches.
+    # Cả hai lệnh ghi diễn ra khi vẫn đang giữ cả hai khóa: thêm dòng ghi danh, rồi tăng sĩ số
+    # mà ràng buộc CHECK đang canh chừng.
     conn.execute(
         """
         INSERT INTO enrollments (student_id, class_section_id, course_code, semester)
@@ -1039,10 +1043,10 @@ def execute_registration(conn, slip_id: str, settings: Settings) -> dict:
 def _schedule_text(day_of_week: int, start_period: int, end_period: int) -> str:
     """Format a class schedule into readable Vietnamese, e.g. "Thu 3, tiet 1-3".
 
-    Dinh dang lich hoc thanh chuoi tieng Viet de doc, vi du "Thu 3, tiet 1-3".
+    Định dạng lịch học thành chuỗi tiếng Việt dễ đọc, ví dụ "Thu 3, tiet 1-3".
 
-    Quy uoc day_of_week theo thoi khoa bieu Viet Nam: 2 = thu Hai, ..., 7 = thu Bay,
-    8 = Chu nhat (xem rang buoc CHECK trong schema.sql).
+    Quy ước day_of_week theo thời khóa biểu Việt Nam: 2 = thứ Hai, ..., 7 = thứ Bảy,
+    8 = Chủ nhật (xem ràng buộc CHECK trong schema.sql).
     """
     names = {2: "Thu 2", 3: "Thu 3", 4: "Thu 4", 5: "Thu 5", 6: "Thu 6", 7: "Thu 7", 8: "Chu nhat"}
     weekday = names.get(day_of_week, f"Thu {day_of_week}")
